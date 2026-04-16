@@ -1,0 +1,27 @@
+import type { TaskListSummary } from '@/types';
+
+interface TaskSummaryCardsProps {
+  summary: TaskListSummary;
+}
+
+const CARD_META = [
+  { key: 'total', label: '任务总数', tone: 'bg-slate-900 text-white' },
+  { key: 'success', label: '成功', tone: 'bg-emerald-100 text-emerald-900' },
+  { key: 'processing', label: '处理中', tone: 'bg-sky-100 text-sky-900' },
+  { key: 'failed', label: '失败', tone: 'bg-rose-100 text-rose-900' },
+  { key: 'batches', label: '批次', tone: 'bg-amber-100 text-amber-900' },
+  { key: 'total_cost', label: '累计次元值', tone: 'bg-violet-100 text-violet-900' },
+] as const;
+
+export function TaskSummaryCards({ summary }: TaskSummaryCardsProps) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      {CARD_META.map((card) => (
+        <div key={card.key} className={`rounded-3xl px-4 py-4 shadow-sm ${card.tone}`}>
+          <div className="text-xs uppercase tracking-[0.18em] opacity-70">{card.label}</div>
+          <div className="mt-3 text-3xl font-semibold">{summary[card.key]}</div>
+        </div>
+      ))}
+    </div>
+  );
+}

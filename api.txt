@@ -1,0 +1,1186 @@
+规则项 说明
+头名称 Authorization （大小写不敏感，建议与示例一致）
+取值格式 固定前缀 Bearer + 一个半角空格 + API Key 字符串
+前缀写法 Bearer 首字母大写，与常见 REST / OpenAPI 实践一致
+请求头 取值说明 是否必填
+Authorization Bearer <YOUR_API_KEY> 是
+情况 建议处理
+未携带 Authorization 检查网关、代理或客户端是否剥离了请求头
+未以 Bearer 开头（含末尾空格） 按 1.3 节格式完整拼接
+开放 API 接口文档
+一、鉴权（Authentication）
+1.1 概述
+调用开放 API 时，请使用平台为您分配的 API Key 进行身份校验。所有需要鉴权的接口均通过标准 HTTP 头传递密
+钥；
+1.2 获取 API Key
+API Key 由平台 用户中心 => API 接口 => 新增API接口 操作申请
+1.3 请求头格式
+在每次 HTTP 请求头中的取值形如： Authorization: Bearer <YOUR_API_KEY> （将 <YOUR_API_KEY> 替换为实际
+密钥）。
+请求头一览
+1.4 Base URL（服务根地址）
+固定域名为： https://api.chcyai.com 。
+请将下文各接口路径拼接在该根地址之后（例如： https://api.chcyai.com/v1/files/uploads ）。
+1.5 鉴权失败时的表现
+当 API Key 缺失、格式不符合要求或已失效时，接口将返回错误响应。请根据 HTTP 状态码与响应体中的 message
+排查问题；常见 code 为 PARAM_ERROR 。
+情况 建议处理
+密钥无效或已停用 在平台核对 Key 是否正确、是否仍启用，必要时重新生成
+层级 字段名 类型 说明
+— data Object 业务数据，具体见各接口
+— requestId String 请求标识/任务 ID
+— status String REQUEST_SUCCESS
+层级 字段名 类型 说明
+— error Object 错误信息（含 code、success 等）
+— requestId String 请求标识
+— status String REQUEST_FAILED
+取值 说明
+advanced 高阶
+basic 基础
+1.6 安全建议
+仅在服务端或受控环境保存 API Key，通过 HTTPS 调用本服务。
+定期轮换密钥；泄露后立即在平台作废并更换。
+勿在日志、错误上报、截图中输出完整 Key。
+二、通用响应结构
+成功:
+失败：
+三、 类型信息
+模式类型 (schema)（高阶 / 基础）
+部分接口（如下文打印图）不使用 schema 区分模式，以接口说明为准。
+支持任务回调的接口可提供 callbackUrl （非必填）：不传则不会向该地址推送完成通知；若填写，须为可公网访
+问的 http 或 https 地址，且不得为本机、内网或未解析主机名等不可用地址（以服务端校验为准）。
+比例类型 (aspectRatioId):
+类型 说明 支持
+0 1:1 高阶、低阶
+1 4:3 高阶
+2 3:4 高阶
+3 4:5 高阶
+4 5:4 高阶
+5 9:16 高阶
+6 16:9 高阶
+7 21:9 高阶
+类型 说明 支持
+0 1K 高阶、低阶
+1 2K 高阶、低阶
+2 4K 高阶
+类型 说明
+1 通用
+2 人像
+类型 说明
+1 黑色
+2 白色
+类型 说明
+WAIT / EXECUTE 执行中
+EXECUTE_SUCCESS 执行成功
+EXECUTE_ERROR 执行失败
+分辨率类型 (resolutionRatioId):
+主体类型(primaryId):
+背景类型 (backgroundId):
+订单状态 (orderStatus):
+类型 说明
+0 不补全
+1 补全
+层级 字段名 类型 必填 说明
+— file MultipartFile 是 文件二进制
+层级 字段名 类型 说明
+— data String 上传成功后的 fileId（用于下载接口）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+401 FILE_NOT_EXIST 文件不存在
+401 FILE_SIZE_ERROR 文件超出(最大不能超出5M)
+401 FORMAT_ERROR 上传文件格式错误
+是否补全 (isPatternCompleted):
+四、 接口说明
+4.1 上传文件
+方法： POST 
+路径： /v1/files/uploads 
+Content-Type： multipart/form-data （表单字段名： file ） 
+请求参数（表单）
+响应参数 （200 OK）
+错误码
+公共错误码
+业务错误码
+层级 字段名 类型 必填 说明
+— fileId String 是 文件 ID（上传接口返回的 data）
+层级 字段名 类型 说明
+— data String 临时下载 URL
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址
+（详见「任务结果回调说明」）
+— referenceImageIdList List<String>
+条
+件
+原图文件 ID 列表，最多 6 个 （ID/ URL/
+Base64 选其一上传）
+4.2 获取文件下载地址
+方法： GET 
+路径： /v1/files/downloads/{fileId} 
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+4.3 创建生图任务
+方法： POST 
+路径： /v1/images/generations 
+Content-Type： application/json 
+请求参数
+层
+级
+字段名 类型 必
+填
+说明
+— referenceImageUrlList List<String>
+条
+件
+原图 URL 列表，最多 6 个（ID/ URL/ Base64
+选其一上传）
+— referenceImageBase64List List<String>
+条
+件
+原图 Base64 列表，最多 6 个（ID/ URL/
+Base64 选其一上传）
+— prompt String 是 用户提示词
+— aspectRatioId Integer 否 比例（详见「类型信息」）
+— resolutionRatioId Integer 是 分辨率（详见「类型信息）
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId），用于查询结果
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务时返回的 data
+响应参数 (200 OK)
+错误码
+公共错误码
+4.3.1 获取生图结果文件ID
+方法： GET 
+路径： /v1/query/images/info/{taskId}
+路径参数
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+响应参数 (200 OK)
+4.3.2 获取生图结果临时 URL
+方法： GET 
+路径： /v1/query/images/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+4.3.3 获取生图结果 Base64
+方法： GET 
+路径： /v1/query/images/getBase64Info/{taskId}
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+层级 字段名 类型 必
+填
+说明
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址
+（详见「任务结果回调说明」）
+— fileName String 否 文件名称
+— referenceImageId String
+条
+件
+原图文件 ID （ID/ URL/ Base64 选其一上
+传）
+路径参数
+响应参数 (200 OK)
+业务错误码
+4.4 生成打印图
+方法： POST 
+路径： /v1/prints/generations 
+Content-Type： application/json 
+说明： 该接口请求体无需 schema 字段（服务端按基础模式计费）。
+请求参数
+层级 字段名 类型 必
+填
+说明
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上
+传）
+— dpi Integer 是 DPI (0-1200)
+— selectedArea Object 否 裁剪区域
+selectedArea cropX Integer 否 裁剪左上角 X
+selectedArea cropY Integer 否 裁剪左上角 Y
+selectedArea cropW Integer 否 裁剪宽度
+selectedArea cropH Integer 否 裁剪高度
+— imageHeight Integer 是 图片高度
+— imageWidth Integer 是 图片宽度
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 同 taskId
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+响应参数 (200 OK)
+错误码
+公共错误码
+4.4.1 获取打印图结果文件ID
+方法： GET 
+路径： /v1/query/prints/info/{taskId} 
+层级 字段名 类型 必填 说明
+— taskId String 是 创建打印图任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+路径参数
+响应参数 (200 OK)
+4.4.2 获取打印图结果临时 URL
+方法： GET 
+路径： /v1/query/prints/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.4.3 获取打印图结果 Base64
+方法： GET 
+路径： /v1/query/prints/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+4.5 创建印花提取任务
+方法： POST 
+路径： /v1/pattern-extraction/generations
+Content-Type： application/json 
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 （详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— prompt String 否 提示词
+— referenceImageId String
+条
+件
+原图 ID （ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图URL （ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图Base64 （ID/ URL/ Base64 选其一上传）
+— fileName String 否 文件名称
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— isPatternCompleted Integer 是 是否补全（详见「类型信息」）
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+请求参数
+响应参数 (200 OK)
+错误码
+公共错误码
+鉴权： 需要 
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+4.5.1 获取印花提取结果文件ID
+方法： GET 
+路径： /v1/query/pattern-extraction/info/{taskId}
+路径参数
+响应参数 (200 OK)
+4.5.2 获取印花提取结果临时 URL
+方法： GET 
+路径： /v1/query/pattern-extraction/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 说明
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.5.3 获取印花提取结果 Base64
+方法： GET 
+路径： /v1/query/pattern-extraction/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详
+见「任务结果回调说明」）
+— prompt String 否 提示词
+— fileName String 否 文件名称
+— referenceImageId String
+条
+件
+原图 ID （ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— similarity BigDecimal 是 相似度，0.01–1
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— aspectRatioId Integer 是 比例 （详见「类型信息」）
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+4.6 创建图裂变任务
+方法： POST 
+路径： /v1/fission/generations
+Content-Type： application/json 
+请求参数
+响应参数 (200 OK)
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+错误码
+公共错误码
+4.6.1 获取图裂变结果文件ID
+方法： GET 
+路径： /v1/query/fission/info/{taskId}
+路径参数
+响应参数 (200 OK)
+4.6.2 获取图裂变结果临时 URL
+方法： GET 
+路径： /v1/query/fission/getTempUrlInfo/{taskId}
+路径参数
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+响应参数 (200 OK)
+4.6.3 获取图裂变结果 Base64
+方法： GET 
+路径： /v1/query/fission/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+层
+级
+字段名 类型 必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— referenceImageId String
+条
+件
+原图文件 ID；（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— primaryId Integer 否 主体类型（详见「类型信息」）
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+4.7 创建 AI 变清晰任务
+方法： POST 
+路径： /v1/becomes-clear/generations
+Content-Type： application/json 
+请求参数
+响应参数 (200 OK)
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+错误码
+公共错误码
+4.7.1 获取 AI 变清晰结果文件ID
+方法： GET 
+路径： /v1/query/becomes-clear/info/{taskId}
+路径参数
+响应参数 (200 OK)
+4.7.2 获取 AI 变清晰结果临时 URL
+方法： GET 
+路径： /v1/query/becomes-clear/getTempUrlInfo/{taskId}
+路径参数
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+响应参数 (200 OK)
+4.7.3 获取 AI 变清晰结果 Base64
+方法： GET 
+路径： /v1/query/becomes-clear/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+层
+级
+字段名 类型 必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地
+址 （详见「任务结果回调说明」）
+— topsReferenceImageId String
+条
+件
+上装：文件 ID（与 URL、Base64 三选
+一）上装下装必填其中一项
+— topsReferenceImageUrl String
+条
+件
+上装 URL
+— topsReferenceImageBase64 String
+条
+件
+上装 Base64
+— bottomsReferenceImageId String
+条
+件
+下装：文件 ID（与 URL、Base64 三选
+一）上装下装必填其中一项
+— bottomsReferenceImageUrl String
+条
+件
+下装 URL
+— bottomsReferenceImageBase64 String
+条
+件
+下装 Base64
+— customTalentFileId String
+条
+件
+自定义模特文件 ID（与 URL、Base64 三
+选一，均可选）模特图可不填
+— customTalentFileUrl String
+条
+件
+自定义模特 URL
+— customTalentFileBase64 String
+条
+件
+自定义模特 Base64
+— customReferenceImageFileId String
+条
+件
+场景/姿势参考：文件 ID（与 URL、
+Base64 三选一）参考图必填其中一项
+4.8 创建服装上身任务
+方法： POST 
+路径： /v1/clothing-upper/generations
+Content-Type： application/json 
+请求参数
+层
+级
+字段名 类型 必
+填
+说明
+— customReferenceImageFileUrl String
+条
+件
+场景/姿势参考 URL
+— customReferenceImageFileBase64 String
+条
+件
+场景/姿势参考 Base64
+— aspectRatioId Integer 是 比例（详见「类型信息」）
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— fileName String 否 文件名称
+— prompt String 否 提示词
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+业务约束： 上装、下装相关字段不能全部为空（至少提供上装或下装之一）；自定义场景/姿势参考必须提供一组；
+具体校验以服务端为准。
+响应参数 (200 OK)
+错误码
+公共错误码
+4.8.1 获取服装上身结果文件ID
+方法： GET 
+路径： /v1/query/clothing-upper/info/{taskId}
+路径参数
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+响应参数 (200 OK)
+4.8.2 获取服装上身结果临时 URL
+方法： GET 
+路径： /v1/query/clothing-upper/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+4.8.3 获取服装上身结果 Base64
+方法： GET 
+路径： /v1/query/clothing-upper/getBase64Info/{taskId}
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+4.9 创建服装去皱任务
+方法： POST 
+路径： /v1/clothing-wrinkle-removal/generations
+Content-Type： application/json 
+请求参数
+层
+级
+字段名 类型 必
+填
+说明
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— referenceImageId String
+条
+件
+原图文件 ID（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— aspectRatioId Integer 是 图片规格（详见「类型信息」）
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— prompt String 否 提示词
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+响应参数 (200 OK)
+错误码
+公共错误码
+4.9.1 获取服装去皱结果文件ID
+方法： GET 
+路径： /v1/query/clothing-wrinkle-removal/info/{taskId}
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+路径参数
+响应参数 (200 OK)
+4.6.2 获取服装去皱结果临时 URL
+方法： GET 
+路径： /v1/query/clothing-wrinkle-removal/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.6.3 获取服装去皱结果 Base64
+方法： GET 
+路径： /v1/query/clothing-wrinkle-removal/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+4.10 创建扣头像任务
+方法： POST 
+路径： /v1/cut-out-portrait/generations
+Content-Type： application/json 
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见「任
+务结果回调说明」）
+— referenceImageId String
+条
+件
+原图文件 ID（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+请求参数
+响应参数 (200 OK)
+错误码
+公共错误码
+4.10.1 获取扣头像结果文件ID
+方法： GET 
+路径： /v1/query/cut-out-portrait/info/{taskId}
+路径参数
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+响应参数 (200 OK)
+4.10.2 获取扣头像结果临时 URL
+方法： GET 
+路径： /v1/query/cut-out-portrait/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+4.10.3 获取扣头像结果 Base64
+方法： GET 
+路径： /v1/query/cut-out-portrait/getBase64Info/{taskId}
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+4.11 创建 3D 服装图任务
+方法： POST 
+路径： /v1/clothing-diagram/generations
+Content-Type： application/json 
+请求参数
+层
+级
+字段名 类型 必
+填
+说明
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— prompt String 否 提示词
+— referenceImageId String
+条
+件
+原图文件 ID（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— aspectRatioId Integer 是 图片规格（详见「类型信息」）
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— exampleId String 否 示例 ID
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+响应参数 (200 OK)
+错误码
+公共错误码
+4.11.1 获取 3D 服装图结果文件ID
+方法： GET 
+路径： /v1/query/clothing-diagram/info/{taskId}
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+路径参数
+响应参数 (200 OK)
+4.11.2 获取 3D 服装图结果临时 URL
+方法： GET 
+路径： /v1/query/clothing-diagram/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.11.3 获取 3D 服装图结果 Base64
+方法： GET 
+路径： /v1/query/clothing-diagram/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+4.12 创建服装提取任务
+方法： POST 
+路径： /v1/garment-extractions/generations
+Content-Type： application/json 
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— prompt String 否 提示词
+— referenceImageId String
+条
+件
+原图文件 ID（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— backgroundId Integer 是 背景类型，取值 1–2（详见「类型信息」）
+— aspectRatioId Integer 否 比例（详见「类型信息」）
+— resolutionRatioId Integer 是 分辨率（详见「类型信息」）
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+请求参数
+响应参数 (200 OK)
+错误码
+公共错误码
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+4.12.1 获取服装提取结果文件ID
+方法： GET 
+路径： /v1/query/garment-extractions/info/{taskId}
+路径参数
+响应参数 (200 OK)
+4.12.2 获取服装提取结果临时 URL
+方法： GET 
+路径： /v1/query/garment-extractions/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 说明
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.12.3 获取服装提取结果 Base64
+方法： GET 
+路径： /v1/query/garment-extractions/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+层
+级
+字段名 类型
+必
+填
+说明
+— schema String 是 模式（详见「类型信息」）
+— callbackUrl String 否
+非必填。回调地址；若传则须合法公网地址 （详见
+「任务结果回调说明」）
+— referenceImageId String
+条
+件
+原图文件 ID（ID/ URL/ Base64 选其一上传）
+— referenceImageUrl String
+条
+件
+原图 URL（ID/ URL/ Base64 选其一上传）
+— referenceImageBase64 String
+条
+件
+原图 Base64（ID/ URL/ Base64 选其一上传）
+— smooth Integer 否 平滑，0–10
+— fileName String 否 文件名称
+层级 字段名 类型 说明
+— data String 任务 ID（taskId）
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+402 INSUFFICIENT_BALANCE 余额不足
+4.13 创建智能抠图任务
+方法： POST 
+路径： /v1/intelligent-matting/generations
+Content-Type： application/json 
+请求参数
+响应参数 (200 OK)
+错误码
+公共错误码
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表（结构同其他生图类查询，以实际返回为准）
+data generateImageId String 生成图文件 ID
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data tempUrl String 结果图临时访问 URL
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+4.13.1 获取智能抠图结果文件ID
+方法： GET 
+路径： /v1/query/intelligent-matting/info/{taskId}
+路径参数
+响应参数 (200 OK)
+4.13.2 获取智能抠图结果临时 URL
+方法： GET 
+路径： /v1/query/intelligent-matting/getTempUrlInfo/{taskId}
+路径参数
+响应参数 (200 OK)
+层级 字段名 类型 说明
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+层级 字段名 类型 必填 说明
+— taskId String 是 创建任务返回的 data
+层级 字段名 类型 说明
+— data Object 见下表
+data base64 String 结果图 Base64 字符串
+data deductibleAmount BigDecimal 应扣金额
+data orderStatus String 订单状态，见「订单状态」
+— requestId String 请求标识
+— status String 请求状态 [REQUEST_SUCCESS / REQUEST_FAILED]
+状态码 错误码(code) 说明
+401 PARAM_ERROR 参数错误或鉴权失败
+状态码 错误码(code) 说明
+404 TASK_NOT_EXIST 任务不存在
+4.13.3 获取智能抠图结果 Base64
+方法： GET 
+路径： /v1/query/intelligent-matting/getBase64Info/{taskId}
+路径参数
+响应参数 (200 OK)
+错误码
+公共错误码
+业务错误码
+五、任务结果回调说明
+创建任务时若传递了 callbackUrl (回调地址参数) , 平台将在任务结束后主动通过HTTP请求进行调用通知, 请求
+体与「通用成功响应」一致
+类型: POST
+请求头: Content-Type: application/json
+若任务失败，正文会变成失败形态（带错误信息与 requestId ），建议与成功分支一起做兼容处理。
+注意事项
+平台连上您的服务后，只会短时间等一个 HTTP 应答。请您在收到 POST 后 尽快先返回正常的 HTTP 成功响
+应，请不要再回调通知接口中进行耗时业务操作，否则容易超时。超时或异常时，平台会按规则 自动重试；若
+多次仍失败，本次推送可能不再继续，届时请您用文档中的 查询类接口 核对任务最终状态。
