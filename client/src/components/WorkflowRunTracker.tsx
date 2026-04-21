@@ -57,8 +57,8 @@ export function WorkflowRunTracker({ runId, onComplete, onClose }: WorkflowRunTr
 
           // 获取该批次的任务详情
           const tasksResponse = await apiClient.getTasks({
-            workflowRunId: String(runId),
-            limit: '100',
+            workflowRunId: runId,
+            limit: 100,
           });
           const tasks = tasksResponse.data.data?.tasks || [];
 
@@ -153,7 +153,7 @@ export function WorkflowRunTracker({ runId, onComplete, onClose }: WorkflowRunTr
 
   const statusConfig = STATUS_CONFIG[run.status] || STATUS_CONFIG.pending;
   const totalSteps = taskProgress.length > 0 ? taskProgress[0].steps.length : 0;
-  const totalStepExecutions = taskProgress.reduce((sum, item) => sum + item.steps.length, 0);
+  // totalStepExecutions 保留供后续使用
   const completedSteps = taskProgress.reduce(
     (sum, item) => sum + item.steps.filter((s) => s.status === 'success').length,
     0

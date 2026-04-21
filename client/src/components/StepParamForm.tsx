@@ -12,6 +12,7 @@ interface FormField {
   max?: number;
   step?: number;
   readOnly?: boolean;
+  hint?: string;
 }
 
 const FUNCTION_FIELDS: Record<string, FormField[]> = {
@@ -253,7 +254,7 @@ export function StepParamForm({ step, value, onChange, index }: StepParamFormPro
                       className="flex-1"
                     />
                     <span className="ml-3 w-16 text-right text-xs text-cyan-700">
-                      {typeof fieldValue === 'number' ? fieldValue.toFixed(2) : fieldValue}
+                      {typeof fieldValue === 'number' ? String(fieldValue.toFixed(2)) : String(fieldValue ?? '')}
                     </span>
                   </div>
                 </div>

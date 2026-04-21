@@ -85,7 +85,7 @@ export function BatchTaskCard({
   const statusColor = STATUS_COLORS[overallStatus] || STATUS_COLORS.pending;
 
   const firstTask = tasks[0];
-  const previewUrl = firstTask ? extractPreviewUrl(firstTask) : null;
+  // previewUrl 保留供后续使用
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

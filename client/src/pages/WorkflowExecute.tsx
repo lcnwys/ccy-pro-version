@@ -3,7 +3,7 @@ import { apiClient } from '@/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ResourcePicker, type SelectedResource } from '@/components/ResourcePicker';
 import { WorkflowRunTracker } from '@/components/WorkflowRunTracker';
-import type { WorkflowRecord, WorkflowRunRecord } from '@/types';
+import type { WorkflowRecord } from '@/types';
 
 interface WorkflowExecuteProps {
   workflow: WorkflowRecord;

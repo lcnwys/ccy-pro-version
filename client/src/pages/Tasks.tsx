@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { TaskSummaryCards } from '@/components/TaskSummaryCards';
-import { TaskTable } from '@/components/TaskTable';
 import { WorkflowRunCard } from '@/components/WorkflowRunCard';
 import { BatchTaskCard } from '@/components/BatchTaskCard';
 import { apiClient } from '@/api';
@@ -169,8 +168,9 @@ export function Tasks() {
       if (selectedTeamId !== '') params.append('teamId', String(selectedTeamId));
 
       // 并行获取工作流运行和任务列表
+      const workflowIdParam = workflowFilter !== '' ? String(workflowFilter) : '';
       const [runsRes, tasksRes] = await Promise.all([
-        fetch(`${API_BASE}/workflow-runs/aggregated?${new URLSearchParams({ workflowId: workflowFilter !== '' ? String(workflowFilter) : undefined }).toString()}`, {
+        fetch(`${API_BASE}/workflow-runs/aggregated?${new URLSearchParams(workflowIdParam ? { workflowId: workflowIdParam } : {}).toString()}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_BASE}/tasks?${params.toString()}`, {
@@ -544,7 +544,18 @@ export function Tasks() {
                       <WorkflowRunCard
                         key={run.id}
                         run={run}
-                        tasks={runTasks}
+                        tasks={runTasks.map(t => ({
+                          id: t.id,
+                          workflow_step_key: t.workflow_step_key || '',
+                          workflow_step_name: t.workflow_step_name || '',
+                          status: t.status,
+                          input_data: t.input_data,
+                          output_data: t.output_data,
+                          result_url: t.result_url,
+                          error_message: t.error_message,
+                          created_at: t.created_at,
+                          completed_at: t.completed_at,
+                        }))}
                         workflowSteps={workflow?.steps}
                       />
                     );
@@ -597,9 +608,9 @@ export function Tasks() {
                           functionType={firstTask.function_type}
                           tasks={batchTasks}
                           createdAt={firstTask.created_at}
-                          user_email={firstTask.user_email}
-                          user_nickname={firstTask.user_nickname}
-                          team_name={firstTask.team_name}
+                          user_email={firstTask.user_email || ''}
+                          user_nickname={firstTask.user_nickname || ''}
+                          team_name={firstTask.team_name || ''}
                           showTeam={showTeamColumn}
                           showUser={showUserColumn}
                         />

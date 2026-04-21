@@ -22,8 +22,8 @@ interface WorkflowRunCardProps {
   run: WorkflowRunRecord;
   tasks?: Array<{
     id: number;
-    workflow_step_key: string;
-    workflow_step_name: string;
+    workflow_step_key: string | null | undefined;
+    workflow_step_name: string | null | undefined;
     status: string;
     input_data: string;
     output_data?: string | null;

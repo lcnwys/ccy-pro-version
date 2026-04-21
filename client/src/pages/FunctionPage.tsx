@@ -194,6 +194,7 @@ interface FormField {
   min?: number;
   max?: number;
   step?: number;
+  hint?: string;
 }
 
 export function FunctionPage() {
@@ -222,8 +223,7 @@ export function FunctionPage() {
   // 打印图裁剪相关状态
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropArea, setCropArea] = useState({ x: 0, y: 0, w: 0, h: 0 });
-  const [cropImageSrc, setCropImageSrc] = useState<string>('');
-  const [hasCropped, setHasCropped] = useState(false); // 标记用户是否进行了裁剪操作
+  const [hasCropped, setHasCropped] = useState(false);
   const [cropAspectRatio, setCropAspectRatio] = useState<'free' | 'original' | '1:1' | '4:3' | '3:4' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'>('free');
 
   const config = type ? FUNCTION_CONFIG[type] : null;
@@ -341,10 +341,10 @@ export function FunctionPage() {
           const updatedTasks = data.data.tasks || [];
           // Only update if there are actual changes
           setHistoryTasks(prev => {
-            const prevIds = new Set(prev.map(t => t.id));
-            const hasNewTasks = updatedTasks.some(t => !prevIds.has(t.id));
-            const hasStatusChanges = updatedTasks.some(t => {
-              const prevTask = prev.find(pt => pt.id === t.id);
+            const prevIds = new Set(prev.map((t: TaskRecord) => t.id));
+            const hasNewTasks = updatedTasks.some((t: TaskRecord) => !prevIds.has(t.id));
+            const hasStatusChanges = updatedTasks.some((t: TaskRecord) => {
+              const prevTask = prev.find((pt) => pt.id === t.id);
               return prevTask && prevTask.status !== t.status;
             });
             if (hasNewTasks || hasStatusChanges) {

@@ -103,6 +103,9 @@ export interface MaterialAsset {
   user_email?: string | null;
   user_nickname?: string | null;
   team_name?: string | null;
+  result_url?: string | null;
+  image_width?: number | null;
+  image_height?: number | null;
 }
 
 export interface CreateTaskResponse {

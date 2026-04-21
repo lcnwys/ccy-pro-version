@@ -40,7 +40,6 @@ const extractInputImageUrl = (inputData: unknown, apiBase?: string): string | nu
   try {
     const input = typeof inputData === 'string' ? JSON.parse(inputData) : inputData;
     if (typeof input === 'object' && input !== null) {
-      const record = input as Record<string, unknown>;
       // 优先使用 URL
       if (typeof input.referenceImageUrl === 'string' && input.referenceImageUrl.startsWith('http')) {
         return input.referenceImageUrl;
@@ -209,8 +208,8 @@ export function TaskDetail() {
           if (workflowRunData.success) {
             // 获取该工作流运行下的所有任务
             const tasksResponse = await apiClient.getTasks({
-              workflowRunId,
-              limit: '200',
+              workflowRunId: parseInt(workflowRunId),
+              limit: 200,
             });
             const workflowTasks = tasksResponse.data.data?.tasks || [];
 

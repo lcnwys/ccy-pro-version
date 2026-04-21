@@ -65,10 +65,17 @@ const FUNCTION_META: Record<string, { label: string; hint: string; commonParams:
   },
 };
 
+interface FunctionMeta {
+  label: string;
+  hint: string;
+  commonParams: string[];
+  hideDimensionsInput?: boolean;
+}
+
 interface ParamFieldDef {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'select' | 'boolean';
+  type: 'string' | 'number' | 'select' | 'boolean' | 'text';
   default?: unknown;
   options?: Array<{ label: string; value: unknown }>;
   placeholder?: string;
@@ -236,7 +243,7 @@ export function WorkflowParamEditor({ steps, values, onChange }: WorkflowParamEd
     <div className="space-y-6">
       {steps.map((step, stepIndex) => {
         const funcMeta = FUNCTION_META[step.functionType];
-        const stepParams = values[step.key] || {};
+        // stepParams 保留供后续扩展使用
 
         // 获取该功能类型的所有参数字段
         const allFields = funcMeta?.commonParams?.flatMap((paramKey) => PARAM_FIELDS[paramKey] || []) || [];

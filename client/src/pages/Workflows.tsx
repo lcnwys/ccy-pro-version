@@ -242,20 +242,7 @@ const OFFICIAL_TEMPLATES: OfficialTemplate[] = [
   },
 ];
 
-const STARTER_TEMPLATE_STEPS: WorkflowStep[] = [
-  {
-    key: 'start_extract',
-    name: '印花提取',
-    functionType: 'pattern-extraction',
-    inputTemplate: {
-      referenceImageId: '{{item.referenceImageId}}',
-      schema: 'basic',
-      aspectRatioId: 0,
-      resolutionRatioId: 0,
-      isPatternCompleted: 0,
-    },
-  },
-];
+// STARTER_TEMPLATE_STEPS 保留供后续使用
 
 const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-900',
@@ -408,12 +395,7 @@ export function Workflows() {
     setPageMode('preview');
   };
 
-  const handleSelectStep = (stepKey: string) => {
-    const step = editableSteps.find((item) => item.key === stepKey);
-    if (!step) return;
-    setSelectedStepKey(stepKey);
-  };
-
+  // handleSelectStep 保留供后续使用
   const handleUpdateStepParams = (params: Record<string, unknown>) => {
     if (!selectedStepKey) return;
     setEditableSteps((current) =>

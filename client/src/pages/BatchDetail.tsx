@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { apiClient } from '@/api';
-import type { TaskRecord, WorkflowRunRecord } from '@/types';
+import { Link, useParams } from 'react-router-dom';
+import type { TaskRecord } from '@/types';
 
 const FUNCTION_NAMES: Record<string, string> = {
   'image-generation': 'AI 生图',
@@ -49,10 +48,8 @@ const extractImageUrl = (dataString: string | null | undefined, priorityKeys: st
 
 export function BatchDetail() {
   const { batchId } = useParams<{ batchId: string }>();
-  const [searchParams] = useSearchParams();
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [workflowRun, setWorkflowRun] = useState<WorkflowRunRecord | null>(null);
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
 

@@ -75,11 +75,10 @@ interface TaskTableProps {
 
 export function TaskTable({
   tasks,
-  showTeam = false,
   showUser = false,
   emptyText = '暂无任务数据',
   apiBase = 'http://localhost:3000/api/v1',
-}: TaskTableProps) {
+}: Omit<TaskTableProps, 'showTeam'>) {
   if (tasks.length === 0) {
     return (
       <div className="w-full rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-8 text-center text-xs text-slate-500 sm:rounded-3xl sm:px-6 sm:py-12 sm:text-sm">
