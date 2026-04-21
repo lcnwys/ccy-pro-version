@@ -54,11 +54,13 @@ export type OrderStatus = 'WAIT' | 'EXECUTE' | 'EXECUTE_SUCCESS' | 'EXECUTE_ERRO
 
 // 任务结果
 export interface TaskResult {
+  taskId?: string;
   generateImageId?: string;
   tempUrl?: string;
   base64?: string;
   deductibleAmount?: number;
   orderStatus?: OrderStatus;
+  status?: 'WAIT' | 'EXECUTE' | 'EXECUTE_SUCCESS' | 'EXECUTE_ERROR';
 }
 
 // 通用参考图参数（三选一）

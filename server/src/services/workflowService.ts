@@ -610,7 +610,7 @@ export const workflowService = {
               WHERE id = ?
             `, [taskId]);
 
-            let output: Record<string, unknown>;
+            let output: Record<string, unknown> | undefined;
 
             if (input.dryRun) {
               // 调试模式：生成模拟响应，不调用实际 API
@@ -665,27 +665,32 @@ export const workflowService = {
               }
             }
 
+            // output 此时一定已赋值
+            const outputData = output!;
+            const taskOriginId = (outputData.taskId as string) || '';
+
             exec(`
               UPDATE tasks
               SET status = 'success', output_data = ?, result_url = ?, completed_at = CURRENT_TIMESTAMP
               WHERE id = ?
             `, [
-              JSON.stringify(output),
-              typeof output.tempUrl === 'string' ? output.tempUrl : (output.mockUrl as string | null),
+              JSON.stringify(outputData),
+              typeof outputData.tempUrl === 'string' ? outputData.tempUrl : (outputData.mockUrl as string | null),
               taskId,
             ]);
 
             // 将生成的图片保存到 materials 表
-            const resultUrl = typeof output.tempUrl === 'string' ? output.tempUrl : (output.mockUrl as string | null);
+            const resultUrl = typeof outputData.tempUrl === 'string' ? outputData.tempUrl : (outputData.mockUrl as string | null);
             if (resultUrl) {
               try {
                 const taskInfo = query('SELECT * FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
                 if (taskInfo.length > 0) {
                   const task = taskInfo[0];
+                  const taskOriginIdForMaterial = (outputData.taskId as string) || taskOriginId || '';
                   createMaterial({
                     userId: task.user_id as number,
                     teamId: task.team_id as number,
-                    fileId: `TASK_${output.taskId || taskOriginId || ''}`, // 标记这是 taskId
+                    fileId: `TASK_${taskOriginIdForMaterial}`, // 标记这是 taskId
                     localFile: `generated-workflow-${taskId}-${Date.now()}.jpg`,
                     originalName: `${step.functionType}-result-${task.task_id_origin || taskId}.jpg`,
                     mimeType: 'image/jpeg',
@@ -702,8 +707,8 @@ export const workflowService = {
               }
             }
 
-            context.prev = output;
-            context.steps[step.key] = output;
+            context.prev = outputData;
+            context.steps[step.key] = outputData;
           }
 
           completedItems += 1;

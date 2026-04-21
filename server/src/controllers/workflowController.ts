@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { workflowService, type WorkflowStep } from '../services/workflowService.js';
 import { isTeamAdmin } from '../services/teamService.js';
 import { getBeijingTime } from '../utils/time.js';
+import { query } from '../database/index.js';
 import type { AuthRequest } from '../middlewares/auth.js';
 
 const LOG_PREFIX = '[工作流接口]';
@@ -216,7 +217,7 @@ export const workflowController = {
       }, workflowId);
 
       // 获取所有 run IDs
-      const runIds = runs.map((r: Record<string, unknown>) => r.id as number);
+      const runIds = runs.map((r) => r.id as number);
 
       // 获取这些运行关联的所有任务
       let tasks: Array<Record<string, unknown>> = [];
@@ -252,7 +253,7 @@ export const workflowController = {
       }
 
       // 将任务附加到运行记录上
-      const runsWithTasks = runs.map((run: Record<string, unknown>) => ({
+      const runsWithTasks = runs.map((run) => ({
         ...run,
         tasks: tasksByRunId.get(run.id as number) || [],
       }));
@@ -264,21 +265,5 @@ export const workflowController = {
       console.error(`${LOG_PREFIX} [${timestamp}] 聚合工作流运行列表获取失败 error=${message}`);
       res.status(500).json({ success: false, error: message });
     }
-  },
-
-  getRunById: async (req: AuthRequest, res: Response) => {
-    const run = workflowService.getRunById(parseInt(req.params.id, 10));
-    if (!run) {
-      return res.status(404).json({ success: false, error: '工作流运行不存在' });
-    }
-
-    if (req.user!.role !== 'super_admin') {
-      const canAccess = run.created_by === req.user!.id || (run.team_id > 0 && isTeamAdmin(req.user!.id, run.team_id)) || run.team_id === req.user!.teamId;
-      if (!canAccess) {
-        return res.status(403).json({ success: false, error: '无权查看该工作流运行' });
-      }
-    }
-
-    res.json({ success: true, data: run });
   },
 };

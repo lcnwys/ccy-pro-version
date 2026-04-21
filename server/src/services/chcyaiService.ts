@@ -42,7 +42,8 @@ apiClient.interceptors.response.use(
   (response) => {
     const timestamp = getBeijingTime();
     console.log(`${LOG_PREFIX} [${timestamp}] RESPONSE ← ${response.status} ${response.config.url}`);
-    console.log(`${LOG_PREFIX}           Duration: ${response.config.time ? Date.now() - response.config.time : 'N/A'}ms`);
+    const duration = (response.config as any).time ? Date.now() - (response.config as any).time : 'N/A';
+    console.log(`${LOG_PREFIX}           Duration: ${duration}ms`);
     const dataStr = JSON.stringify(response.data, null, 2);
     console.log(`${LOG_PREFIX}           Data: ${dataStr}`);
     return response;
@@ -535,7 +536,7 @@ export const runCutoutTest = async () => {
   console.log('[TEST] 等待 3 秒后查询结果...');
   await new Promise(r => setTimeout(r, 3000));
 
-  const queryResult = await chcyaiService.queryResult('cut-out-portrait', result.taskId);
+  const queryResult = await chcyaiService.queryResult('cut-out-portrait', result.taskId!);
   console.log(`[TEST] 查询结果 status: ${queryResult.status}`);
   console.log('[TEST] 完整结果:', JSON.stringify(queryResult, null, 2));
   console.log('=== [TEST] 测试结束 ===\n');
