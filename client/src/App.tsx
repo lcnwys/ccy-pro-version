@@ -6,6 +6,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Tasks } from './pages/Tasks';
 import { TaskDetail } from './pages/TaskDetail';
+import { BatchDetail } from './pages/BatchDetail';
 import { TeamManagement } from './pages/TeamManagement';
 import { PlatformAdmin } from './pages/PlatformAdmin';
 import { Workflows } from './pages/Workflows';
@@ -71,6 +72,7 @@ function AppRoutes() {
         <Route path="/function/:type" element={<FunctionPage />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
+        <Route path="/batches/:batchId" element={<BatchDetail />} />
         <Route path="/teams" element={<TeamManagement />} />
         <Route path="/workflows" element={<Workflows />} />
         <Route path="/admin" element={<SuperAdminRoute><PlatformAdmin /></SuperAdminRoute>} />

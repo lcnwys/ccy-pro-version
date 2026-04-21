@@ -11,6 +11,7 @@ import { apiRouter } from './routes/api.js';
 import { queue } from './queue/index.js';
 import { createProcessor } from './queue/processor.js';
 import { getDatabase, saveDatabase } from './database/index.js';
+import { getBeijingTime } from './utils/time.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -79,7 +80,7 @@ const app = express();
 
 // 请求日志中间件
 app.use((req, res, next) => {
-  const timestamp = new Date().toLocaleTimeString('zh-CN');
+  const timestamp = getBeijingTime();
   const method = req.method;
   const url = req.url;
   const ip = req.ip || req.socket.remoteAddress;

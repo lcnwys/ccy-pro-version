@@ -15,11 +15,11 @@ const CARD_META = [
 
 export function TaskSummaryCards({ summary }: TaskSummaryCardsProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="w-full grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
       {CARD_META.map((card) => (
-        <div key={card.key} className={`rounded-3xl px-4 py-4 shadow-sm ${card.tone}`}>
-          <div className="text-xs uppercase tracking-[0.18em] opacity-70">{card.label}</div>
-          <div className="mt-3 text-3xl font-semibold">{summary[card.key]}</div>
+        <div key={card.key} className={`rounded-2xl px-4 py-3 shadow-sm sm:rounded-3xl sm:px-4 sm:py-4 ${card.tone}`}>
+          <div className="text-[10px] uppercase tracking-[0.18em] opacity-70 sm:text-xs">{card.label}</div>
+          <div className="mt-2 text-2xl font-semibold sm:mt-3 sm:text-3xl">{summary[card.key]}</div>
         </div>
       ))}
     </div>

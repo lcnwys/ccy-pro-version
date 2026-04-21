@@ -129,7 +129,7 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
               type="checkbox"
               checked={!selectedTeamId}
               onChange={(e) => handleTeamChange(e.target.checked ? undefined : (teams[0]?.id || undefined))}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
             <span className="text-gray-700">使用平台模式（无限额度，用于功能测试）</span>
           </label>
@@ -144,7 +144,7 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
           <select
             value={selectedTeamId || ''}
             onChange={(e) => handleTeamChange(parseInt(e.target.value))}
-            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
           >
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
@@ -156,8 +156,8 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
       )}
 
       {budget && (
-        <div className="flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-md">
-          <span className="text-sm text-indigo-600 font-medium">
+        <div className="flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2">
+          <span className="text-sm font-medium text-indigo-600">
             {isSuperAdmin && !selectedTeamId ? '平台模式：无限额度' : `可用额度：${budget.available} 积分`}
           </span>
         </div>

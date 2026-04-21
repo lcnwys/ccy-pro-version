@@ -12,6 +12,7 @@ coverage/
 .env
 .env.local
 .env.*.local
+server/.env
 
 data/*.db
 server/data/*.db

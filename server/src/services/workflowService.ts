@@ -5,7 +5,12 @@ import { getUserBudget, consumeBudget } from './budgetService.js';
 import { getTaskCost } from './pricing.js';
 import { isTeamAdmin, isTeamMember } from './teamService.js';
 import { chcyaiService } from './chcyaiService.js';
+import { createMaterial } from './materialService.js';
+import { getBeijingTime } from '../utils/time.js';
+import { queue } from '../queue/index.js';
 import type { FunctionType } from './types.js';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface WorkflowStep {
   key: string;
@@ -68,6 +73,59 @@ type WorkflowContext = {
 };
 
 const LOG_PREFIX = '[工作流服务]';
+
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 60;
+
+const extractSubmittedTaskId = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['taskId', 'requestId', 'id']) {
+      const candidate = record[key];
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+};
+
+const waitForTaskResult = async (functionType: FunctionType, taskOriginId: string) => {
+  let lastResult: Record<string, unknown> | null = null;
+
+  for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
+    const result = await chcyaiService.queryResult(functionType, taskOriginId) as Record<string, unknown>;
+    lastResult = result;
+    const orderStatus = result.orderStatus;
+
+    if (orderStatus === 'EXECUTE_SUCCESS') {
+      let tempUrl: string | null = typeof result.tempUrl === 'string' ? result.tempUrl : null;
+
+      if (!tempUrl) {
+        try {
+          tempUrl = await chcyaiService.getTempUrl(functionType, taskOriginId);
+        } catch (error) {
+          console.warn(`${LOG_PREFIX} 获取临时 URL 失败 taskOriginId=${taskOriginId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      return {
+        ...result,
+        taskId: taskOriginId,
+        tempUrl,
+      };
+    }
+
+    if (orderStatus === 'EXECUTE_ERROR') {
+      throw new Error(`上游任务执行失败 taskId=${taskOriginId}`);
+    }
+
+    await sleep(POLL_INTERVAL_MS);
+  }
+
+  throw new Error(`轮询超时，任务仍未完成 taskId=${taskOriginId} lastStatus=${String(lastResult?.orderStatus || 'UNKNOWN')}`);
+};
 
 const parseWorkflow = (record: WorkflowRecord) => {
   return {
@@ -151,6 +209,17 @@ const insertWorkflowTask = (input: {
   workflowStepName: string;
   workflowItemIndex: number;
 }) => {
+  const inputDataWithMeta = {
+    ...input.inputData,
+    workflowMeta: {
+      workflowId: input.workflowId,
+      workflowRunId: input.workflowRunId,
+      workflowStepKey: input.workflowStepKey,
+      workflowStepName: input.workflowStepName,
+      workflowItemIndex: input.workflowItemIndex,
+    },
+  };
+
   exec(`
     INSERT INTO tasks (
       user_id, team_id, batch_id, function_type, status, input_data, cost,
@@ -171,7 +240,12 @@ const insertWorkflowTask = (input: {
     input.workflowItemIndex,
   ]);
 
-  return lastInsertRowid();
+  const taskId = lastInsertRowid();
+
+  // 将任务添加到队列中进行处理 - 使用包含 workflowMeta 的完整输入数据
+  queue.add({ taskId, functionType: input.functionType, inputData: inputDataWithMeta });
+
+  return taskId;
 };
 
 const updateWorkflowRun = (runId: number, updates: Record<string, unknown>) => {
@@ -252,6 +326,23 @@ export const workflowService = {
 
     const id = lastInsertRowid();
     return workflowService.getWorkflowById(id);
+  },
+
+  updateWorkflow: (input: {
+    workflowId: number;
+    name: string;
+    description?: string;
+    steps: WorkflowStep[];
+  }) => {
+    workflowService.validateSteps(input.steps);
+
+    exec(`
+      UPDATE workflows
+      SET name = ?, description = ?, steps_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [input.name, input.description || null, JSON.stringify(input.steps), input.workflowId]);
+
+    return workflowService.getWorkflowById(input.workflowId);
   },
 
   getWorkflowById: (id: number) => {
@@ -369,6 +460,8 @@ export const workflowService = {
     createdBy: number;
     items: Array<Record<string, unknown>>;
     requestedConcurrency?: number;
+    dryRun?: boolean;
+    isSuperAdmin?: boolean; // 是否为超级管理员模式
   }) => {
     if (!Array.isArray(input.items) || input.items.length === 0) {
       throw new Error('至少需要一条批量输入');
@@ -410,7 +503,10 @@ export const workflowService = {
 
     const runId = lastInsertRowid();
 
-    void workflowService.processRun({
+    console.log(`${LOG_PREFIX} [${getBeijingTime()}] 准备启动 processRun runId=${runId}`);
+
+    // 异步处理工作流执行，不阻塞返回
+    workflowService.processRun({
       runId,
       workflowId: input.workflowId,
       workflowName: workflow.name,
@@ -420,9 +516,15 @@ export const workflowService = {
       items: input.items,
       concurrency,
       runBatchId,
+      dryRun: input.dryRun || false,
+      isSuperAdmin: input.isSuperAdmin || false,
+    }).catch((err) => {
+      console.error(`${LOG_PREFIX} [${getBeijingTime()}] processRun 未捕获错误 runId=${runId} error=${err instanceof Error ? err.message : 'Unknown'}`);
     });
 
-    return workflowService.getRunById(runId);
+    const result = workflowService.getRunById(runId);
+    console.log(`${LOG_PREFIX} [${getBeijingTime()}] startRun 返回 runId=${runId} result=${JSON.stringify(result)}`);
+    return result;
   },
 
   processRun: async (input: {
@@ -435,138 +537,230 @@ export const workflowService = {
     items: Array<Record<string, unknown>>;
     concurrency: number;
     runBatchId: string;
+    dryRun: boolean;
+    isSuperAdmin?: boolean; // 是否为超级管理员模式
   }) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
-    console.log(`${LOG_PREFIX} [${timestamp}] 启动工作流运行 runId=${input.runId} workflowId=${input.workflowId} items=${input.items.length}`);
+    const timestamp = getBeijingTime();
+    console.log(`${LOG_PREFIX} [${timestamp}] === 进入 processRun === runId=${input.runId} workflowId=${input.workflowId} items=${input.items.length} dryRun=${input.dryRun}`);
 
-    updateWorkflowRun(input.runId, { status: 'running' });
+    try {
+      updateWorkflowRun(input.runId, { status: 'running' });
+      console.log(`${LOG_PREFIX} [${timestamp}] 工作流状态已更新为 running runId=${input.runId}`);
 
-    const results: Array<Record<string, unknown>> = [];
-    let completedItems = 0;
-    let failedItems = 0;
+      const results: Array<Record<string, unknown>> = [];
+      let completedItems = 0;
+      let failedItems = 0;
 
-    await runWithConcurrency(input.items, input.concurrency, async (item, itemIndex) => {
-      const itemBatchId = `${input.runBatchId}-${itemIndex + 1}`;
-      const context: WorkflowContext = {
-        item,
-        prev: {},
-        steps: {},
-        run: {
-          id: input.runId,
-          itemIndex,
-          workflowId: input.workflowId,
-          batchId: itemBatchId,
-        },
-      };
+      console.log(`${LOG_PREFIX} [${timestamp}] 开始执行 runWithConcurrency concurrency=${input.concurrency}`);
 
-      try {
-        for (const step of input.steps) {
-          const resolvedInput = sanitizeResolvedInput(
-            resolveTemplateValue(step.inputTemplate, context) as Record<string, unknown>
-          );
-          const taskCost = getTaskCost(step.functionType, resolvedInput);
+      await runWithConcurrency(input.items, input.concurrency, async (item, itemIndex) => {
+        console.log(`${LOG_PREFIX} [${timestamp}] 开始处理 item ${itemIndex}`);
+        const itemBatchId = `${input.runBatchId}-${itemIndex + 1}`;
+        const context: WorkflowContext = {
+          item,
+          prev: {},
+          steps: {},
+          run: {
+            id: input.runId,
+            itemIndex,
+            workflowId: input.workflowId,
+            batchId: itemBatchId,
+          },
+        };
 
-          if (input.teamId > 0) {
-            const budget = getUserBudget(input.createdBy, input.teamId);
-            if (!budget || budget.available < taskCost) {
-              throw new Error(`额度不足，无法执行步骤 ${step.name}`);
+        try {
+          for (const step of input.steps) {
+            const resolvedInput = sanitizeResolvedInput(
+              resolveTemplateValue(step.inputTemplate, context) as Record<string, unknown>
+            );
+            const taskCost = getTaskCost(step.functionType, resolvedInput);
+
+            // 调试模式或超级管理员：跳过额度检查
+            if (!input.dryRun && input.teamId > 0 && !input.isSuperAdmin) {
+              const budget = getUserBudget(input.createdBy, input.teamId);
+              if (!budget || budget.available < taskCost) {
+                throw new Error(`额度不足，无法执行步骤 ${step.name}`);
+              }
             }
+
+            const taskId = insertWorkflowTask({
+              userId: input.createdBy,
+              teamId: input.teamId,
+              batchId: itemBatchId,
+              functionType: step.functionType,
+              inputData: resolvedInput,
+              cost: (input.teamId > 0 && !input.dryRun && !input.isSuperAdmin) ? taskCost : 0,
+              workflowId: input.workflowId,
+              workflowRunId: input.runId,
+              workflowStepKey: step.key,
+              workflowStepName: step.name,
+              workflowItemIndex: itemIndex,
+            });
+
+            console.log(`${LOG_PREFIX} [${timestamp}] 任务已创建并加入队列 taskId=${taskId} step=${step.name} itemIndex=${itemIndex}`);
+
+            // 调试模式或超级管理员：跳过额度扣除
+            if (!input.dryRun && input.teamId > 0 && !input.isSuperAdmin) {
+              consumeBudget(input.teamId, input.createdBy, taskCost, taskId);
+            }
+
+            exec(`
+              UPDATE tasks
+              SET status = 'processing'
+              WHERE id = ?
+            `, [taskId]);
+
+            let output: Record<string, unknown>;
+
+            if (input.dryRun) {
+              // 调试模式：生成模拟响应，不调用实际 API
+              console.log(`${LOG_PREFIX} [${timestamp}] 调试模式：跳过步骤 ${step.name} 的实际 API 调用`);
+              output = {
+                success: true,
+                isMock: true,
+                stepKey: step.key,
+                stepName: step.name,
+                functionType: step.functionType,
+                inputData: resolvedInput,
+                mockUrl: `https://mock.chcyai.com/${step.functionType}/${taskId}`,
+                createdAt: new Date().toISOString(),
+              };
+
+              // 模拟一些常见的输出字段，方便后续步骤引用
+              if (step.functionType === 'image-generation' || step.functionType === 'print-generation') {
+                output.tempUrl = output.mockUrl;
+                output.imageUrl = output.mockUrl;
+              }
+              if (step.functionType === 'fission') {
+                output.images = [output.mockUrl];
+              }
+            } else {
+              // 正常模式：任务已加入队列，等待队列处理器完成
+              // 轮询任务状态直到完成
+              let pollCount = 0;
+              const maxPolls = 120; // 最多轮询 120 次 * 3 秒 = 360 秒
+
+              while (pollCount < maxPolls) {
+                await sleep(3000);
+                pollCount++;
+
+                const taskInfo = query('SELECT status, output_data, error_message FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
+                if (taskInfo.length === 0) continue;
+
+                const taskStatus = taskInfo[0].status;
+
+                if (taskStatus === 'success') {
+                  output = JSON.parse(String(taskInfo[0].output_data || '{}'));
+                  break;
+                }
+
+                if (taskStatus === 'failed') {
+                  const errorMsg = taskInfo[0].error_message || '任务执行失败';
+                  throw new Error(String(errorMsg));
+                }
+              }
+
+              if (pollCount >= maxPolls) {
+                throw new Error('等待任务完成超时');
+              }
+            }
+
+            exec(`
+              UPDATE tasks
+              SET status = 'success', output_data = ?, result_url = ?, completed_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `, [
+              JSON.stringify(output),
+              typeof output.tempUrl === 'string' ? output.tempUrl : (output.mockUrl as string | null),
+              taskId,
+            ]);
+
+            // 将生成的图片保存到 materials 表
+            const resultUrl = typeof output.tempUrl === 'string' ? output.tempUrl : (output.mockUrl as string | null);
+            if (resultUrl) {
+              try {
+                const taskInfo = query('SELECT * FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
+                if (taskInfo.length > 0) {
+                  const task = taskInfo[0];
+                  createMaterial({
+                    userId: task.user_id as number,
+                    teamId: task.team_id as number,
+                    fileId: `TASK_${output.taskId || taskOriginId || ''}`, // 标记这是 taskId
+                    localFile: `generated-workflow-${taskId}-${Date.now()}.jpg`,
+                    originalName: `${step.functionType}-result-${task.task_id_origin || taskId}.jpg`,
+                    mimeType: 'image/jpeg',
+                    sizeBytes: 0,
+                    sourceType: 'generated',
+                    taskId: taskId,
+                    workflowRunId: input.runId,
+                    resultUrl: resultUrl, // 存储临时 URL
+                  });
+                  console.log(`${LOG_PREFIX} [${timestamp}] 步骤 ${step.name} 生成图片已保存到素材库`);
+                }
+              } catch (materialError) {
+                console.warn(`${LOG_PREFIX} [${timestamp}] 保存生成图片到素材库失败：${materialError instanceof Error ? materialError.message : 'Unknown error'}`);
+              }
+            }
+
+            context.prev = output;
+            context.steps[step.key] = output;
           }
 
-          const taskId = insertWorkflowTask({
-            userId: input.createdBy,
-            teamId: input.teamId,
+          completedItems += 1;
+          results.push({
+            itemIndex,
+            status: 'success',
             batchId: itemBatchId,
-            functionType: step.functionType,
-            inputData: {
-              ...resolvedInput,
-              workflowMeta: {
-                workflowId: input.workflowId,
-                workflowRunId: input.runId,
-                workflowName: input.workflowName,
-                workflowStepKey: step.key,
-                workflowStepName: step.name,
-                workflowItemIndex: itemIndex,
-              },
-            },
-            cost: input.teamId > 0 ? taskCost : 0,
-            workflowId: input.workflowId,
-            workflowRunId: input.runId,
-            workflowStepKey: step.key,
-            workflowStepName: step.name,
-            workflowItemIndex: itemIndex,
+            finalOutput: context.prev,
+          });
+        } catch (error) {
+          failedItems += 1;
+          const errorMessage = error instanceof Error ? error.message : '工作流步骤执行失败';
+          results.push({
+            itemIndex,
+            status: 'failed',
+            batchId: itemBatchId,
+            errorMessage,
           });
 
-          if (input.teamId > 0) {
-            consumeBudget(input.teamId, input.createdBy, taskCost, taskId);
-          }
-
           exec(`
             UPDATE tasks
-            SET status = 'processing'
-            WHERE id = ?
-          `, [taskId]);
-
-          const output = await chcyaiService.execute(step.functionType, resolvedInput);
-
-          exec(`
-            UPDATE tasks
-            SET status = 'success', output_data = ?, result_url = ?, completed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `, [
-            JSON.stringify(output),
-            typeof output.tempUrl === 'string' ? output.tempUrl : null,
-            taskId,
-          ]);
-
-          context.prev = output as Record<string, unknown>;
-          context.steps[step.key] = output as Record<string, unknown>;
+            SET status = 'failed', error_message = ?, completed_at = CURRENT_TIMESTAMP
+            WHERE workflow_run_id = ? AND workflow_item_index = ? AND status IN ('pending', 'processing')
+          `, [errorMessage, input.runId, itemIndex]);
+        } finally {
+          updateWorkflowRun(input.runId, {
+            completed_items: completedItems,
+            failed_items: failedItems,
+            results_json: JSON.stringify(results),
+          });
         }
+      });
 
-        completedItems += 1;
-        results.push({
-          itemIndex,
-          status: 'success',
-          batchId: itemBatchId,
-          finalOutput: context.prev,
-        });
-      } catch (error) {
-        failedItems += 1;
-        const errorMessage = error instanceof Error ? error.message : '工作流步骤执行失败';
-        results.push({
-          itemIndex,
-          status: 'failed',
-          batchId: itemBatchId,
-          errorMessage,
-        });
+      const finalStatus =
+        failedItems === 0 ? 'success' :
+          completedItems === 0 ? 'failed' :
+            'partial_success';
 
-        exec(`
-          UPDATE tasks
-          SET status = 'failed', error_message = ?, completed_at = CURRENT_TIMESTAMP
-          WHERE workflow_run_id = ? AND workflow_item_index = ? AND status IN ('pending', 'processing')
-        `, [errorMessage, input.runId, itemIndex]);
-      } finally {
-        updateWorkflowRun(input.runId, {
-          completed_items: completedItems,
-          failed_items: failedItems,
-          results_json: JSON.stringify(results),
-        });
-      }
-    });
+      updateWorkflowRun(input.runId, {
+        status: finalStatus,
+        completed_items: completedItems,
+        failed_items: failedItems,
+        results_json: JSON.stringify(results),
+        completed_at: new Date().toISOString(),
+      });
 
-    const finalStatus =
-      failedItems === 0 ? 'success' :
-        completedItems === 0 ? 'failed' :
-          'partial_success';
+      console.log(`${LOG_PREFIX} [${timestamp}] 工作流运行结束 runId=${input.runId} status=${finalStatus}`);
+    } catch (fatalError) {
+      // 处理整个工作流运行过程中的致命错误
+      const errorMessage = fatalError instanceof Error ? fatalError.message : '工作流执行失败';
+      console.error(`${LOG_PREFIX} [${timestamp}] 工作流执行致命错误 runId=${input.runId} error=${errorMessage}`);
 
-    updateWorkflowRun(input.runId, {
-      status: finalStatus,
-      completed_items: completedItems,
-      failed_items: failedItems,
-      results_json: JSON.stringify(results),
-      completed_at: new Date().toISOString(),
-    });
-
-    console.log(`${LOG_PREFIX} [${timestamp}] 工作流运行结束 runId=${input.runId} status=${finalStatus}`);
+      updateWorkflowRun(input.runId, {
+        status: 'failed',
+        error_message: errorMessage,
+        completed_at: new Date().toISOString(),
+      });
+    }
   },
 };

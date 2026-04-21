@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { MaterialAsset } from '@/types';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -26,13 +27,23 @@ export const apiClient = {
   getFunctions: () => api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/functions'),
 
   // 文件上传
-  uploadFile: (file: File) => {
+  uploadFile: (file: File, teamId?: number) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (teamId !== undefined) {
+      formData.append('teamId', String(teamId));
+    }
+    // 不要手动设置 Content-Type，让 axios 自动设置 boundary
     return api.post('/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
   },
+  getRemoteFileUrl: (fileId: string) => api.get(`/files/remote/${fileId}/url`),
+  getMaterials: (params?: { keyword?: string; teamId?: number; limit?: number; sourceType?: 'upload' | 'generated'; taskId?: number; workflowRunId?: number }) =>
+    api.get<{ success: boolean; data: MaterialAsset[] }>('/materials', { params }),
+  markMaterialUsed: (id: number) => api.post(`/materials/${id}/use`),
 
   // 创建单图任务
   createSingleTask: (functionType: string, inputData: Record<string, unknown>, teamId?: number) =>
@@ -44,6 +55,7 @@ export const apiClient = {
 
   // 获取任务详情
   getTask: (id: number) => api.get(`/tasks/${id}`),
+  refreshTaskResultUrl: (id: number) => api.post(`/tasks/${id}/refresh-result-url`),
 
   // 获取批量进度
   getBatchProgress: (batchId: string) => api.get(`/tasks/${batchId}/progress`),
@@ -57,7 +69,9 @@ export const apiClient = {
   getWorkflow: (id: number) => api.get(`/workflows/${id}`),
   createWorkflow: (payload: { name: string; description?: string; teamId?: number; steps: Array<{ key: string; name: string; functionType: string; inputTemplate: Record<string, unknown> }> }) =>
     api.post('/workflows', payload),
-  runWorkflow: (id: number, payload: { items: Array<Record<string, unknown>>; concurrency?: number; teamId?: number }) =>
+  updateWorkflow: (id: number, payload: { name: string; description?: string; steps: Array<{ key: string; name: string; functionType: string; inputTemplate: Record<string, unknown> }> }) =>
+    api.put(`/workflows/${id}`, payload),
+  runWorkflow: (id: number, payload: { items: Array<Record<string, unknown>>; concurrency?: number; teamId?: number; dryRun?: boolean }) =>
     api.post(`/workflows/${id}/run`, payload),
   getWorkflowRuns: (params?: { workflowId?: number }) => api.get('/workflows/runs', { params }),
   getWorkflowRun: (id: number) => api.get(`/workflows/runs/${id}`),

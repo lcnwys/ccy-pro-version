@@ -5,6 +5,8 @@ import { queue } from '../queue/index.js';
 import { getUserBudget, consumeBudget } from '../services/budgetService.js';
 import { getTaskCost } from '../services/pricing.js';
 import { isTeamAdmin, isTeamMember } from '../services/teamService.js';
+import { chcyaiService } from '../services/chcyaiService.js';
+import { getBeijingTime } from '../utils/time.js';
 import type { AuthRequest } from '../middlewares/auth.js';
 import type { FunctionType } from '../services/types.js';
 
@@ -15,7 +17,7 @@ export const taskController = {
    * 创建单图任务
    */
   createSingle: async (req: AuthRequest, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
 
     try {
       const { functionType, inputData, teamId } = req.body as {
@@ -101,7 +103,7 @@ export const taskController = {
    * 创建批量任务
    */
   createBatch: async (req: AuthRequest, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
 
     try {
       const { functionType, items, teamId } = req.body as {
@@ -188,7 +190,7 @@ export const taskController = {
    * 获取任务详情
    */
   getById: async (req: AuthRequest, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
     const { id } = req.params;
 
     try {
@@ -232,11 +234,64 @@ export const taskController = {
     }
   },
 
+  refreshResultUrl: async (req: AuthRequest, res: Response) => {
+    const timestamp = getBeijingTime();
+    const { id } = req.params;
+
+    try {
+      console.log(`${LOG_PREFIX} [${timestamp}] 刷新任务结果链接 id=${id}`);
+
+      const tasks = query('SELECT * FROM tasks WHERE id = ?', [parseInt(id, 10)]) as Array<Record<string, unknown>>;
+      if (tasks.length === 0) {
+        return res.status(404).json({ success: false, error: 'Task not found' });
+      }
+
+      const task = tasks[0];
+
+      if (req.user!.role !== 'super_admin' && task.user_id !== req.user!.id) {
+        if (!isTeamMember(req.user!.id, task.team_id as number)) {
+          return res.status(403).json({ success: false, error: '无权查看该任务' });
+        }
+      }
+
+      if (task.status !== 'success') {
+        return res.status(400).json({ success: false, error: '只有成功任务才可刷新结果链接' });
+      }
+
+      if (!task.task_id_origin || typeof task.task_id_origin !== 'string') {
+        return res.status(400).json({ success: false, error: '该任务缺少上游 taskId，无法刷新结果链接' });
+      }
+
+      const tempUrl = await chcyaiService.getTempUrl(task.function_type as FunctionType, task.task_id_origin);
+      const currentOutput = task.output_data ? JSON.parse(String(task.output_data)) as Record<string, unknown> : {};
+      const nextOutput = { ...currentOutput, tempUrl };
+
+      exec(`
+        UPDATE tasks
+        SET result_url = ?, output_data = ?
+        WHERE id = ?
+      `, [tempUrl, JSON.stringify(nextOutput), parseInt(id, 10)]);
+
+      const refreshedTasks = query('SELECT * FROM tasks WHERE id = ?', [parseInt(id, 10)]) as Array<Record<string, unknown>>;
+      res.json({
+        success: true,
+        data: refreshedTasks[0],
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to refresh result url';
+      console.error(`${LOG_PREFIX} [${timestamp}] 刷新结果链接失败 error=${errorMsg}`);
+      res.status(500).json({
+        success: false,
+        error: errorMsg,
+      });
+    }
+  },
+
   /**
    * 获取批量任务进度
    */
   getBatchProgress: async (req: AuthRequest, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
     const { batchId } = req.params;
 
     try {
@@ -250,6 +305,14 @@ export const taskController = {
       const processing = tasks.filter(t => t.status === 'processing').length;
       const pending = tasks.filter(t => t.status === 'pending').length;
 
+      // 确定整体状态：只要有失败的，整体就是 failed
+      let overallStatus = 'processing';
+      if (failed > 0) {
+        overallStatus = 'failed';
+      } else if (pending === 0 && processing === 0 && completed === total) {
+        overallStatus = 'success';
+      }
+
       console.log(`${LOG_PREFIX} [${timestamp}] 批量进度 batchId=${batchId} total=${total} completed=${completed}`);
 
       res.json({
@@ -262,6 +325,7 @@ export const taskController = {
           processing,
           pending,
           progress: total > 0 ? Math.round((completed / total) * 100) : 0,
+          status: overallStatus,
           tasks,
         },
       });
@@ -279,7 +343,7 @@ export const taskController = {
    * 获取任务列表（支持筛选）
    */
   getList: async (req: AuthRequest, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
 
     try {
       console.log(`${LOG_PREFIX} [${timestamp}] 获取任务列表`);

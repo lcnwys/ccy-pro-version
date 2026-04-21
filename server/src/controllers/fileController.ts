@@ -3,6 +3,9 @@ import multer from 'multer';
 import { config } from '../config/index.js';
 import { fileService } from '../services/fileService.js';
 import { chcyaiService } from '../services/chcyaiService.js';
+import { getBeijingTime } from '../utils/time.js';
+import type { AuthRequest } from '../middlewares/auth.js';
+import { createMaterial } from '../services/materialService.js';
 
 const LOG_PREFIX = '[文件服务]';
 
@@ -24,8 +27,8 @@ const upload = multer({
 export const fileController = {
   upload: upload.single('file'),
 
-  handleUpload: async (req: Request, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+  handleUpload: async (req: AuthRequest, res: Response) => {
+    const timestamp = getBeijingTime();
 
     console.log(`${LOG_PREFIX} [${timestamp}] 收到上传请求`);
     console.log(`${LOG_PREFIX}           Content-Type: ${req.headers['content-type']}`);
@@ -47,21 +50,57 @@ export const fileController = {
 
       console.log(`${LOG_PREFIX} [${timestamp}] 上传文件 filename=${filename} size=${size} type=${mimetype}`);
 
-      // 保存文件到本地
-      const localFilename = await fileService.saveFile(req.file.buffer, req.file.originalname);
-      console.log(`${LOG_PREFIX} [${timestamp}] 文件保存到本地 localFilename=${localFilename}`);
+      // 保存文件到本地（同时上传到 TOS）
+      const saveResult = await fileService.saveFile(req.file.buffer, req.file.originalname);
+      console.log(`${LOG_PREFIX} [${timestamp}] 文件保存 ${saveResult.tosKey ? '到 TOS' : '到本地'} tosKey=${saveResult.tosKey || 'none'}`);
 
       // 调用创次元 API 上传
       console.log(`${LOG_PREFIX} [${timestamp}] 调用创次元 API 上传文件`);
       const fileId = await chcyaiService.uploadFile(req.file.buffer, req.file.originalname);
 
-      console.log(`${LOG_PREFIX} [${timestamp}] 上传成功 fileId=${fileId}`);
+      // 获取图片尺寸（如果是图片）
+      let imageWidth: number | null = null;
+      let imageHeight: number | null = null;
+      if (mimetype.startsWith('image/')) {
+        try {
+          const sizeOf = await import('image-size');
+          const dimensions = sizeOf.default(req.file.buffer);
+          imageWidth = dimensions.width || null;
+          imageHeight = dimensions.height || null;
+          console.log(`${LOG_PREFIX} [${timestamp}] 图片尺寸 ${imageWidth}x${imageHeight}`);
+        } catch (e) {
+          console.warn(`${LOG_PREFIX} [${timestamp}] 获取图片尺寸失败：${e instanceof Error ? e.message : 'Unknown'}`);
+        }
+      }
+
+      const requestedTeamId = typeof req.body.teamId === 'string' && req.body.teamId ? Number(req.body.teamId) : undefined;
+      const teamId = requestedTeamId ?? req.user?.teamId ?? 0;
+      const material = req.user
+        ? createMaterial({
+            userId: req.user.id,
+            teamId,
+            fileId,
+            localFile: saveResult.filename,
+            originalName: filename,
+            mimeType: mimetype,
+            sizeBytes: size,
+            imageWidth,
+            imageHeight,
+            resultUrl: saveResult.tosUrl, // TOS 永久链接
+          })
+        : null;
+
+      console.log(`${LOG_PREFIX} [${timestamp}] 上传成功 fileId=${fileId} materialId=${material?.id ?? 'none'} size=${imageWidth ? `${imageWidth}x${imageHeight}` : 'N/A'}`);
 
       res.json({
         success: true,
         data: {
-          localFile: localFilename,
+          localFile: saveResult.filename,
           fileId,
+          material,
+          imageWidth,
+          imageHeight,
+          tosUrl: saveResult.tosUrl, // 返回 TOS URL 供前端直接使用
         },
       });
     } catch (error) {
@@ -75,7 +114,7 @@ export const fileController = {
   },
 
   download: async (req: Request, res: Response) => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    const timestamp = getBeijingTime();
     const { filename } = req.params;
 
     console.log(`${LOG_PREFIX} [${timestamp}] 下载文件 filename=${filename}`);
@@ -83,8 +122,8 @@ export const fileController = {
     try {
       const buffer = await fileService.readFile(filename);
 
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('Content-Type', fileService.getMimeType(filename));
       res.send(buffer);
 
       console.log(`${LOG_PREFIX} [${timestamp}] 下载成功 filename=${filename}`);
@@ -93,6 +132,31 @@ export const fileController = {
       res.status(404).json({
         success: false,
         error: 'File not found',
+      });
+    }
+  },
+
+  getRemoteFileUrl: async (req: Request, res: Response) => {
+    const timestamp = getBeijingTime();
+    const { fileId } = req.params;
+
+    console.log(`${LOG_PREFIX} [${timestamp}] 获取远程文件链接 fileId=${fileId}`);
+
+    try {
+      const url = await chcyaiService.getFileDownloadUrl(fileId);
+      res.json({
+        success: true,
+        data: {
+          fileId,
+          url,
+        },
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to get remote file url';
+      console.error(`${LOG_PREFIX} [${timestamp}] 获取远程文件链接失败 error=${errorMsg}`);
+      res.status(500).json({
+        success: false,
+        error: errorMsg,
       });
     }
   },

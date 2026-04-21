@@ -306,6 +306,57 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
     )
   `);
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS materials (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      team_id INTEGER NOT NULL DEFAULT 0,
+      file_id TEXT UNIQUE NOT NULL,
+      local_file TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      source_type TEXT DEFAULT 'upload' CHECK(source_type IN ('upload', 'generated')),
+      task_id INTEGER,
+      workflow_run_id INTEGER,
+      tags_json TEXT,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (task_id) REFERENCES tasks(id),
+      FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id)
+    )
+  `);
+
+  // 检查 materials 表是否需要迁移（添加缺失的列）
+  const materialsTableCheck = database.exec(`
+    SELECT sql FROM sqlite_master WHERE type='table' AND name='materials'
+  `);
+
+  if (materialsTableCheck.length > 0) {
+    const createSql = materialsTableCheck[0]?.values[0]?.[0] as string;
+    if (createSql && !createSql.includes('task_id')) {
+      console.log('[Database] materials table missing task_id column, adding...');
+      database.exec('ALTER TABLE materials ADD COLUMN task_id INTEGER');
+    }
+    if (createSql && !createSql.includes('workflow_run_id')) {
+      console.log('[Database] materials table missing workflow_run_id column, adding...');
+      database.exec('ALTER TABLE materials ADD COLUMN workflow_run_id INTEGER');
+    }
+    if (createSql && !createSql.includes('result_url')) {
+      console.log('[Database] materials table missing result_url column, adding...');
+      database.exec('ALTER TABLE materials ADD COLUMN result_url TEXT');
+    }
+    if (createSql && !createSql.includes('image_width')) {
+      console.log('[Database] materials table missing image_width/image_height columns, adding...');
+      database.exec('ALTER TABLE materials ADD COLUMN image_width INTEGER');
+      database.exec('ALTER TABLE materials ADD COLUMN image_height INTEGER');
+    }
+  }
+
   // ==================== 使用统计 ====================
 
   // 使用统计表
@@ -371,6 +422,12 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
     CREATE INDEX IF NOT EXISTS idx_workflow_runs_created_by ON workflow_runs(created_by);
     CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
     CREATE INDEX IF NOT EXISTS idx_workflow_runs_batch_id ON workflow_runs(run_batch_id);
+    CREATE INDEX IF NOT EXISTS idx_materials_team_id ON materials(team_id);
+    CREATE INDEX IF NOT EXISTS idx_materials_user_id ON materials(user_id);
+    CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
+    CREATE INDEX IF NOT EXISTS idx_materials_source_type ON materials(source_type);
+    CREATE INDEX IF NOT EXISTS idx_materials_task_id ON materials(task_id);
+    CREATE INDEX IF NOT EXISTS idx_materials_workflow_run_id ON materials(workflow_run_id);
   `);
 
   // ==================== 初始化数据 ====================
@@ -381,7 +438,7 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
   `);
 
   if (existingAdmin.length === 0) {
-    // 使用固定哈希：admin123 的 bcrypt hash (salt rounds=10)
+    // 默认密码：admin123（生产环境请修改）
     const adminPasswordHash = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
     try {
       const bcrypt = require('bcryptjs');
@@ -390,20 +447,16 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
         INSERT INTO users (email, password_hash, nickname, role, is_team_admin)
         VALUES ('admin@chcyai.com', '${hash}', '系统管理员', 'super_admin', 0)
       `);
-      console.log('[初始化] 平台管理员账号已创建:');
-      console.log('[初始化] 邮箱：admin@chcyai.com');
-      console.log('[初始化] 密码：admin123');
-      console.log('[初始化] 请妥善保管账号信息并发送给部署负责人');
+      console.log('[初始化] 默认平台管理员账号已创建 (email: admin@chcyai.com, password: admin123)');
+      console.log('[初始化] 生产环境请务必修改默认密码！');
     } catch (e) {
       // bcrypt 不可用时使用简单哈希
       database.exec(`
         INSERT INTO users (email, password_hash, nickname, role, is_team_admin)
         VALUES ('admin@chcyai.com', '${adminPasswordHash}', '系统管理员', 'super_admin', 0)
       `);
-      console.log('[初始化] 平台管理员账号已创建:');
-      console.log('[初始化] 邮箱：admin@chcyai.com');
-      console.log('[初始化] 密码：admin123');
-      console.log('[初始化] 请妥善保管账号信息并发送给部署负责人');
+      console.log('[初始化] 默认平台管理员账号已创建 (email: admin@chcyai.com, password: admin123)');
+      console.log('[初始化] 生产环境请务必修改默认密码！');
     }
   }
 

@@ -35,6 +35,15 @@ export const config = {
     enabled: process.env.NODE_ENV !== 'production',
     origins: ['http://localhost:5173'],
   },
+  tos: {
+    accessKeyId: process.env.TOS_ACCESS_KEY_ID || '',
+    accessKeySecret: process.env.TOS_ACCESS_KEY_SECRET || '',
+    region: process.env.TOS_REGION || 'cn-beijing',
+    bucket: process.env.TOS_BUCKET || '',
+    endpoint: process.env.TOS_ENDPOINT || 'tos-cn-beijing.volces.com',
+    publicBaseUrl: process.env.TOS_PUBLIC_BASE_URL || '',
+    uploadPrefix: process.env.TOS_UPLOAD_PREFIX || 'uploads',
+  },
 };
 
 export default config;

@@ -22,6 +22,7 @@ export interface TaskRecord {
   input_data: string;
   output_data?: string | null;
   result_url?: string | null;
+  task_id_origin?: string | null;
   cost?: number;
   error_message?: string | null;
   created_at: string;
@@ -81,7 +82,27 @@ export interface UploadResponse {
   data: {
     localFile: string;
     fileId: string;
+    material?: MaterialAsset;
   };
+}
+
+export interface MaterialAsset {
+  id: number;
+  user_id: number;
+  team_id: number;
+  file_id: string;
+  local_file: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  source_type: 'upload' | 'library';
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string | null;
+  user_email?: string | null;
+  user_nickname?: string | null;
+  team_name?: string | null;
 }
 
 export interface CreateTaskResponse {

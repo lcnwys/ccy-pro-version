@@ -65,13 +65,27 @@ export const taskRepository = {
     });
   },
 
-  updateStatus: async (id: number, status: string, outputData?: Record<string, unknown>, errorMessage?: string) => {
+  updateStatus: async (
+    id: number,
+    status: string,
+    outputData?: Record<string, unknown>,
+    errorMessage?: string,
+    options?: { resultUrl?: string | null }
+  ) => {
     const db = await getDatabase();
+    const isFinalStatus = status === 'success' || status === 'failed';
     db.run(`
       UPDATE tasks
-      SET status = ?, output_data = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
+      SET status = ?, output_data = ?, error_message = ?, result_url = ?, completed_at = ?
       WHERE id = ?
-    `, [status, outputData ? JSON.stringify(outputData) : null, errorMessage ?? null, id]);
+    `, [
+      status,
+      outputData ? JSON.stringify(outputData) : null,
+      errorMessage ?? null,
+      options?.resultUrl ?? null,
+      isFinalStatus ? new Date().toISOString() : null,
+      id,
+    ]);
     await saveDatabase();
   },
 

@@ -18,9 +18,10 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,116,144,0.12),_transparent_35%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-6 px-4 py-4 lg:px-6">
-        <aside className="hidden w-72 shrink-0 lg:block">
-          <div className="sticky top-4 overflow-hidden rounded-[32px] border border-slate-200 bg-white/90 p-5 shadow-xl backdrop-blur">
+      <div className="mx-auto min-h-screen w-full max-w-[1680px] px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+        <div className="grid min-h-[calc(100vh-2rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-4 overflow-hidden rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-xl backdrop-blur sm:rounded-[32px] sm:p-5">
             <div>
               <div className="text-xs uppercase tracking-[0.24em] text-cyan-700">Chuang Ciyuan</div>
               <h1 className="mt-3 text-2xl font-semibold text-slate-900">创次元 PRO</h1>
@@ -66,9 +67,9 @@ export function AppShell() {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-col">
           <header className="lg:hidden">
-            <div className="mb-4 rounded-[28px] border border-slate-200 bg-white/90 px-4 py-4 shadow-lg backdrop-blur">
+            <div className="mb-3 rounded-[20px] border border-slate-200 bg-white/90 px-3 py-3 shadow-lg backdrop-blur sm:rounded-[28px] sm:px-4 sm:py-4">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs uppercase tracking-[0.22em] text-cyan-700">创次元 PRO</div>
@@ -78,14 +79,14 @@ export function AppShell() {
                   退出
                 </button>
               </div>
-              <nav className="mt-4 flex flex-wrap gap-2">
+              <nav className="mt-3 flex flex-wrap gap-1.5">
                 {links.map((item) => {
                   const active = item.match(location.pathname);
                   return (
                     <Link
                       key={item.to}
                       to={item.to}
-                      className={`rounded-full px-3 py-2 text-sm font-medium ${
+                      className={`rounded-full px-2.5 py-1.5 text-xs font-medium sm:px-3 sm:py-2 sm:text-sm ${
                         active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
@@ -98,8 +99,11 @@ export function AppShell() {
           </header>
 
           <main className="min-w-0">
-            <Outlet />
+            <div className="mx-auto w-full max-w-[1280px]">
+              <Outlet />
+            </div>
           </main>
+        </div>
         </div>
       </div>
     </div>

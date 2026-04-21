@@ -19,7 +19,7 @@ export function TaskProgress({ batchId, onComplete }: TaskProgressProps) {
         setLoading(false);
 
         // 如果未完成，继续轮询
-        if (res.data.data.progress < 100) {
+        if (res.data.data.progress < 100 && res.data.data.status !== 'failed') {
           setTimeout(fetchProgress, 2000);
         } else if (onComplete) {
           onComplete();
