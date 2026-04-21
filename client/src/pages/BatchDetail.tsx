@@ -65,13 +65,6 @@ export function BatchDetail() {
       // 检查是否是 workflow_run
       if (batchId?.startsWith('wr-')) {
         const runId = parseInt(batchId.slice(3), 10);
-        const runRes = await fetch(`${API_BASE}/workflows/runs/${runId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const runData = await runRes.json();
-        if (runData.success) {
-          setWorkflowRun(runData.data);
-        }
 
         // 获取该工作流运行关联的所有任务
         const tasksRes = await fetch(`${API_BASE}/tasks?workflowRunId=${runId}&limit=100`, {

@@ -36,7 +36,6 @@ const FUNCTION_META: Record<string, { label: string; hint: string; commonParams:
     label: '印刷图',
     hint: '生成适合印刷的高质量图像',
     commonParams: ['referenceImageId', 'dpi', 'imageWidth', 'imageHeight'],
-    hideDimensionsInput: true, // 尺寸固定为原图，不显示输入框
   },
   'image-generation': {
     label: 'AI 生图',
@@ -64,13 +63,6 @@ const FUNCTION_META: Record<string, { label: string; hint: string; commonParams:
     commonParams: ['referenceImageId', 'schema', 'backgroundId', 'resolutionRatioId'],
   },
 };
-
-interface FunctionMeta {
-  label: string;
-  hint: string;
-  commonParams: string[];
-  hideDimensionsInput?: boolean;
-}
 
 interface ParamFieldDef {
   key: string;

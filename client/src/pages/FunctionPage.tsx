@@ -963,7 +963,6 @@ export function FunctionPage() {
                 <TaskTable
                   tasks={historyTasks}
                   showUser={user?.role === 'super_admin' || Boolean(user?.is_team_admin)}
-                  showTeam={user?.role === 'super_admin' && !selectedTeamId}
                   emptyText="当前功能还没有历史任务"
                   apiBase={API_BASE}
                 />
@@ -1058,10 +1057,9 @@ export function FunctionPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden p-6 bg-slate-100">
+            <div className="flex-1 overflow-hidden bg-slate-100 p-6">
               <PrintImageCropper
                 onImageSelect={(image) => {
-                  setCropImageSrc(image.imageUrl || '');
                   // 初始化表单的宽高字段
                   if (image.width && image.height) {
                     setFormData(prev => ({

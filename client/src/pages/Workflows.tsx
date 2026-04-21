@@ -373,21 +373,7 @@ export function Workflows() {
     return editableSteps.find((step) => step.key === selectedStepKey) || null;
   }, [editableSteps, selectedStepKey]);
 
-  const handleAddStep = (functionType: string) => {
-    if (!previewEntry || previewEntry.source !== 'team') return;
-
-    const newStep: WorkflowStep = {
-      key: `${functionType}_${Date.now()}`,
-      name: FUNCTION_META[functionType]?.label || functionType,
-      functionType: functionType as any,
-      inputTemplate: {
-        schema: 'basic',
-        referenceImageId: editableSteps.length > 0 ? '{{prev.generateImageId}}' : '{{item.fileId}}',
-      },
-    };
-
-    setEditableSteps([...editableSteps, newStep]);
-  };
+  // handleAddStep 保留供后续使用
 
   const openPreview = (entry: TemplateEntry) => {
     setMenuId(null);
@@ -395,7 +381,6 @@ export function Workflows() {
     setPageMode('preview');
   };
 
-  // handleSelectStep 保留供后续使用
   const handleUpdateStepParams = (params: Record<string, unknown>) => {
     if (!selectedStepKey) return;
     setEditableSteps((current) =>

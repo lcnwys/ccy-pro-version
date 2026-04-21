@@ -84,9 +84,6 @@ export function BatchTaskCard({
   const progress = total > 0 ? Math.round((success / total) * 100) : 0;
   const statusColor = STATUS_COLORS[overallStatus] || STATUS_COLORS.pending;
 
-  const firstTask = tasks[0];
-  // previewUrl 保留供后续使用
-
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* 头部：批次摘要 */}
