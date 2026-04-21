@@ -31,6 +31,11 @@ server/output.log
 server/server.log
 server/server_output.log
 
+# PM2
+logs/*.log
+!logs/.gitkeep
+.pm2/
+
 .claude/
 .playwright-mcp/
 test-package/
