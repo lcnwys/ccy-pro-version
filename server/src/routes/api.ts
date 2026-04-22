@@ -24,6 +24,7 @@ apiRouter.post('/tasks/batch', requireAuth, taskController.createBatch);
 apiRouter.get('/tasks', requireAuth, taskController.getList);
 apiRouter.get('/tasks/:id', requireAuth, taskController.getById);
 apiRouter.post('/tasks/:id/refresh-result-url', requireAuth, taskController.refreshResultUrl);
+apiRouter.post('/tasks/batch-refresh-urls', requireAuth, taskController.batchRefreshResultUrls);
 apiRouter.get('/tasks/:batchId/progress', requireAuth, taskController.getBatchProgress);
 
 // 工作流相关

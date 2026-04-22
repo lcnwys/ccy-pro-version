@@ -32,8 +32,8 @@ export const config = {
     maxItemsPerRun: parseInt(process.env.WORKFLOW_MAX_ITEMS || '20'),
   },
   cors: {
-    enabled: process.env.NODE_ENV !== 'production',
-    origins: ['http://localhost:5173'],
+    enabled: true,
+    origins: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(','),
   },
   tos: {
     accessKeyId: process.env.TOS_ACCESS_KEY_ID || '',

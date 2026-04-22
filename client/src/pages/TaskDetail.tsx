@@ -171,7 +171,7 @@ export function TaskDetail() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [workflowView, setWorkflowView] = useState<{ enabled: boolean; groups: WorkflowTaskGroup[] } | null>(null);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
   const fetchTask = async (showRefreshing = false) => {
     if (!id) return;

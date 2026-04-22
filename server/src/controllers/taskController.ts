@@ -288,6 +288,53 @@ export const taskController = {
   },
 
   /**
+   * 批量刷新任务结果链接
+   */
+  batchRefreshResultUrls: async (req: AuthRequest, res: Response) => {
+    const timestamp = getBeijingTime();
+    const { taskIds } = req.body as { taskIds: number[] };
+
+    try {
+      if (!Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'taskIds 不能为空' });
+      }
+
+      console.log(`${LOG_PREFIX} [${timestamp}] 批量刷新结果链接 count=${taskIds.length}`);
+
+      const results: Array<Record<string, unknown>> = [];
+
+      for (const taskId of taskIds) {
+        try {
+          const tasks = query('SELECT * FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
+          if (tasks.length === 0) continue;
+
+          const task = tasks[0];
+
+          if (task.status !== 'success' || !task.task_id_origin) continue;
+
+          const tempUrl = await chcyaiService.getTempUrl(task.function_type as FunctionType, task.task_id_origin as string);
+          const currentOutput = task.output_data ? JSON.parse(String(task.output_data)) as Record<string, unknown> : {};
+          const nextOutput = { ...currentOutput, tempUrl };
+
+          exec(`
+            UPDATE tasks SET result_url = ?, output_data = ? WHERE id = ?
+          `, [tempUrl, JSON.stringify(nextOutput), taskId]);
+
+          const refreshed = query('SELECT * FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
+          results.push(refreshed[0]);
+        } catch (error) {
+          console.warn(`${LOG_PREFIX} [${timestamp}] 刷新单个任务失败 taskId=${taskId} error=${error instanceof Error ? error.message : 'Unknown'}`);
+        }
+      }
+
+      res.json({ success: true, data: results });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to batch refresh';
+      res.status(500).json({ success: false, error: errorMsg });
+    }
+  },
+
+  /**
    * 获取批量任务进度
    */
   getBatchProgress: async (req: AuthRequest, res: Response) => {
@@ -297,7 +344,7 @@ export const taskController = {
     try {
       console.log(`${LOG_PREFIX} [${timestamp}] 获取批量进度 batchId=${batchId}`);
 
-      const tasks = query('SELECT * FROM tasks WHERE batch_id = ?', [batchId]) as Array<Record<string, unknown>>;
+      const tasks = query('SELECT * FROM tasks WHERE batch_id = ? ORDER BY workflow_item_index ASC, created_at ASC', [batchId]) as Array<Record<string, unknown>>;
 
       const total = tasks.length;
       const completed = tasks.filter(t => t.status === 'success').length;
@@ -465,7 +512,7 @@ export const taskController = {
         LEFT JOIN users u ON u.id = t.user_id
         LEFT JOIN teams team ON team.id = t.team_id
         ${whereClause}
-        ORDER BY t.created_at DESC
+        ORDER BY ${workflowRunId ? 't.workflow_item_index ASC, t.created_at ASC' : 't.created_at DESC'}
         LIMIT ? OFFSET ?
       `, [...params, limitNum, offsetNum]);
 

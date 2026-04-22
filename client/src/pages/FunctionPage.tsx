@@ -229,7 +229,7 @@ export function FunctionPage() {
   const config = type ? FUNCTION_CONFIG[type] : null;
   const taskCost = type ? getTaskCost(type, formData) : 0;
   const taskPriceHint = type ? getTaskPriceHint(type) : '';
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
   useEffect(() => {
     // 初始化表单默认值

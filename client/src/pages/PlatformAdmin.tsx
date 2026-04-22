@@ -60,7 +60,7 @@ export function PlatformAdmin() {
   const [rechargeTeamId, setRechargeTeamId] = useState<number>(0);
   const [rechargeAmount, setRechargeAmount] = useState<number>(0);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
   const budgetMap = useMemo(() => {
     return budgets.reduce<Record<number, Budget>>((acc, item) => {

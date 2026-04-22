@@ -355,6 +355,37 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
       database.exec('ALTER TABLE materials ADD COLUMN image_width INTEGER');
       database.exec('ALTER TABLE materials ADD COLUMN image_height INTEGER');
     }
+    // 迁移旧版 CHECK 约束：source_type IN ('upload', 'library') → ('upload', 'generated')
+    if (createSql && createSql.includes("'library'")) {
+      console.log('[Database] migrating materials table CHECK constraint from library to generated...');
+      database.exec(`
+        CREATE TABLE materials_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          team_id INTEGER NOT NULL DEFAULT 0,
+          file_id TEXT UNIQUE NOT NULL,
+          local_file TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          source_type TEXT DEFAULT 'upload' CHECK(source_type IN ('upload', 'generated')),
+          task_id INTEGER,
+          workflow_run_id INTEGER,
+          result_url TEXT,
+          image_width INTEGER,
+          image_height INTEGER,
+          tags_json TEXT,
+          usage_count INTEGER NOT NULL DEFAULT 0,
+          last_used_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      database.exec(`INSERT INTO materials_new SELECT * FROM materials`);
+      database.exec(`DROP TABLE materials`);
+      database.exec(`ALTER TABLE materials_new RENAME TO materials`);
+      console.log('[Database] materials table CHECK constraint migrated successfully');
+    }
   }
 
   // ==================== 使用统计 ====================

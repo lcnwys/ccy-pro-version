@@ -986,7 +986,7 @@ export function Workflows() {
                 <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-6">
                   {createMode === 'blank' ? (
                     <div className="mx-auto max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6">
-                      <div className="text-sm font-medium text-slate-900">空白模板将带一个起始步骤，后续再继续扩展。</div>
+                      <div className="text-sm font-medium text-slate-900">空白模板不包含任何步骤，创建后可自由添加。</div>
                       <div className="mt-6 space-y-4">
                         <div>
                           <label className="mb-2 block text-sm text-slate-600">模板名称</label>
@@ -1006,7 +1006,7 @@ export function Workflows() {
                           />
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                          初始步骤：<span className="font-medium text-slate-900">印花提取</span>
+                          创建后将进入编辑器，你可以自由添加任意功能步骤。
                         </div>
                         <button
                           type="button"

@@ -77,7 +77,7 @@ export function TaskTable({
   tasks,
   showUser = false,
   emptyText = '暂无任务数据',
-  apiBase = 'http://localhost:3000/api/v1',
+  apiBase = '/api/v1',
 }: Omit<TaskTableProps, 'showTeam'>) {
   if (tasks.length === 0) {
     return (

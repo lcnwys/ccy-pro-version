@@ -23,7 +23,7 @@ interface TaskProgress {
   }>;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   pending: { label: '等待中', color: 'bg-amber-100 text-amber-900', icon: '⏳' },

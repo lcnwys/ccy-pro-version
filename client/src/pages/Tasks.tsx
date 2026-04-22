@@ -73,7 +73,7 @@ export function Tasks() {
     return value ? Number(value) : user?.team_id ?? '';
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
   const canViewTeamScope = Boolean(user?.is_team_admin || user?.role === 'super_admin');
   const canViewPlatformScope = user?.role === 'super_admin';

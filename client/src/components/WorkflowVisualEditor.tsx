@@ -32,10 +32,24 @@ const generateStepName = (functionType: string) => {
   return func?.label || functionType;
 };
 
-const createDefaultInputTemplate = (functionType: string): Record<string, unknown> => {
+// 需要参考图的功能类型
+const NEEDS_REFERENCE_IMAGE = new Set([
+  'pattern-extraction', 'fission', 'print-generation', 'becomes-clear',
+  'intelligent-matting', 'cut-out-portrait', 'clothing-wrinkle-removal',
+  'clothing-diagram', 'garment-extractions',
+]);
+
+const createDefaultInputTemplate = (functionType: string, isFirstChild: boolean): Record<string, unknown> => {
   const baseTemplate: Record<string, unknown> = {
     schema: 'basic',
   };
+
+  // 自动设置参考图：第一个步骤引用 item，后续步骤引用上一步结果
+  if (NEEDS_REFERENCE_IMAGE.has(functionType)) {
+    baseTemplate.referenceImageId = isFirstChild
+      ? '{{item.referenceImageId}}'
+      : '{{prev.generateImageId}}';
+  }
 
   switch (functionType) {
     case 'pattern-extraction':
@@ -51,7 +65,6 @@ const createDefaultInputTemplate = (functionType: string): Record<string, unknow
       break;
     case 'print-generation':
       baseTemplate.dpi = 300;
-      // 默认从上一步获取图片尺寸
       baseTemplate.imageWidth = '{{prev.imageWidth}}';
       baseTemplate.imageHeight = '{{prev.imageHeight}}';
       break;
@@ -114,7 +127,7 @@ export function WorkflowVisualEditor({ steps, onChange, selectedStepKey, onSelec
       key: generateStepKey(functionType, steps.length),
       name: generateStepName(functionType),
       functionType: functionType as any,
-      inputTemplate: createDefaultInputTemplate(functionType),
+      inputTemplate: createDefaultInputTemplate(functionType, steps.length === 0),
     };
     onChange([...steps, newStep]);
     setShowAddMenu(false);
