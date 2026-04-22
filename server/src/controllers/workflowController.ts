@@ -1,9 +1,13 @@
 import { Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { workflowService, type WorkflowStep } from '../services/workflowService.js';
 import { isTeamAdmin } from '../services/teamService.js';
 import { getBeijingTime } from '../utils/time.js';
-import { query } from '../database/index.js';
+import { query, exec, lastInsertRowid } from '../database/index.js';
+import { getTaskCost } from '../services/pricing.js';
+import { queue } from '../queue/index.js';
 import type { AuthRequest } from '../middlewares/auth.js';
+import type { FunctionType } from '../services/types.js';
 
 const LOG_PREFIX = '[工作流接口]';
 
@@ -263,6 +267,142 @@ export const workflowController = {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to list aggregated workflow runs';
       console.error(`${LOG_PREFIX} [${timestamp}] 聚合工作流运行列表获取失败 error=${message}`);
+      res.status(500).json({ success: false, error: message });
+    }
+  },
+
+  retryStep: async (req: AuthRequest, res: Response) => {
+    const timestamp = getBeijingTime();
+
+    try {
+      const runId = parseInt(req.params.id, 10);
+      const { itemIndex, stepKey, inputData } = req.body as {
+        itemIndex: number;
+        stepKey: string;
+        inputData?: Record<string, unknown>;
+      };
+
+      console.log(`${LOG_PREFIX} [${timestamp}] 重试工作流步骤 runId=${runId} itemIndex=${itemIndex} stepKey=${stepKey}`);
+
+      const run = workflowService.getRunById(runId);
+      if (!run) {
+        return res.status(404).json({ success: false, error: '工作流运行不存在' });
+      }
+
+      if (req.user!.role !== 'super_admin') {
+        const canAccess = run.created_by === req.user!.id || isTeamAdmin(req.user!.id, run.team_id);
+        if (!canAccess) {
+          return res.status(403).json({ success: false, error: '无权操作该工作流运行' });
+        }
+      }
+
+      const workflow = workflowService.getWorkflowById(run.workflow_id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: '工作流不存在' });
+      }
+
+      const steps = workflow.steps;
+      const stepIndex = steps.findIndex((s) => s.key === stepKey);
+      if (stepIndex === -1) {
+        return res.status(400).json({ success: false, error: `步骤 ${stepKey} 不存在` });
+      }
+
+      // 获取该 itemIndex 下所有已有任务
+      const existingTasks = query(
+        'SELECT * FROM tasks WHERE workflow_run_id = ? AND workflow_item_index = ? ORDER BY created_at ASC',
+        [runId, itemIndex]
+      ) as Array<Record<string, unknown>>;
+
+      // 构建 context：收集之前成功步骤的输出
+      const context: Record<string, Record<string, unknown>> = {};
+      for (const task of existingTasks) {
+        const taskStepKey = task.workflow_step_key as string;
+        if (task.status === 'success' && task.output_data) {
+          context[taskStepKey] = JSON.parse(String(task.output_data));
+        }
+      }
+
+      // 将失败/后续步骤标记为 cancelled
+      exec(`
+        UPDATE tasks
+        SET status = 'failed', error_message = '被步骤重试取消'
+        WHERE workflow_run_id = ? AND workflow_item_index = ?
+          AND workflow_step_key IN (${steps.slice(stepIndex).map(() => '?').join(',')})
+          AND status IN ('pending', 'processing', 'failed')
+      `, [runId, itemIndex, ...steps.slice(stepIndex).map((s) => s.key)]);
+
+      // 从指定步骤开始重新创建任务
+      const step = steps[stepIndex];
+      const prevOutput = stepIndex > 0 ? context[steps[stepIndex - 1].key] || {} : {};
+
+      // 解析 inputTemplate
+      const inputItems = JSON.parse(run.input_items_json || '[]') as Array<Record<string, unknown>>;
+      const item = inputItems[itemIndex] || {};
+
+      // 简单模板解析：用 prevOutput 和 item 数据
+      let resolvedInput: Record<string, unknown>;
+      if (inputData) {
+        resolvedInput = inputData;
+      } else {
+        resolvedInput = { ...step.inputTemplate };
+        for (const [key, value] of Object.entries(resolvedInput)) {
+          if (typeof value === 'string') {
+            const match = value.match(/^\{\{\s*(\w+)\.(\w+)\s*\}\}$/);
+            if (match) {
+              const [, root, path] = match;
+              if (root === 'prev' && prevOutput[path] !== undefined) {
+                resolvedInput[key] = prevOutput[path];
+              } else if (root === 'item' && item[path] !== undefined) {
+                resolvedInput[key] = item[path];
+              }
+            }
+          }
+        }
+      }
+
+      const taskCost = getTaskCost(step.functionType, resolvedInput);
+
+      exec(`
+        INSERT INTO tasks (
+          user_id, team_id, batch_id, function_type, status, input_data, cost,
+          workflow_id, workflow_run_id, workflow_step_key, workflow_step_name, workflow_item_index
+        )
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        run.created_by,
+        run.team_id,
+        `retry-${uuidv4().slice(0, 8)}`,
+        step.functionType,
+        JSON.stringify(resolvedInput),
+        run.team_id ? taskCost : 0,
+        run.workflow_id,
+        runId,
+        step.key,
+        step.name,
+        itemIndex,
+      ]);
+
+      const newTaskId = lastInsertRowid();
+      queue.add({
+        taskId: newTaskId,
+        functionType: step.functionType,
+        inputData: {
+          ...resolvedInput,
+          workflowMeta: {
+            workflowId: run.workflow_id,
+            workflowRunId: runId,
+            workflowStepKey: step.key,
+            workflowStepName: step.name,
+            workflowItemIndex: itemIndex,
+          },
+        },
+      });
+
+      console.log(`${LOG_PREFIX} [${timestamp}] 工作流步骤重试成功 newTaskId=${newTaskId} step=${step.key}`);
+      res.json({ success: true, data: { taskId: newTaskId } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to retry workflow step';
+      console.error(`${LOG_PREFIX} [${timestamp}] 工作流步骤重试失败 error=${message}`);
       res.status(500).json({ success: false, error: message });
     }
   },

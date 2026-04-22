@@ -56,6 +56,9 @@ export const apiClient = {
   // 获取任务详情
   getTask: (id: number) => api.get(`/tasks/${id}`),
   refreshTaskResultUrl: (id: number) => api.post(`/tasks/${id}/refresh-result-url`),
+  retryTask: (id: number, inputData?: Record<string, unknown>) => api.post(`/tasks/${id}/retry`, { inputData }),
+  retryWorkflowStep: (runId: number, body: { itemIndex: number; stepKey: string; inputData?: Record<string, unknown> }) =>
+    api.post(`/workflows/runs/${runId}/retry-step`, body),
 
   // 获取批量进度
   getBatchProgress: (batchId: string) => api.get(`/tasks/${batchId}/progress`),

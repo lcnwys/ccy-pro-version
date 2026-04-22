@@ -474,6 +474,28 @@ export function TaskDetail() {
                 {refreshingResultUrl ? '刷新图片中...' : '刷新结果图片'}
               </button>
             )}
+            {(task.status === 'failed' || task.status === 'success') && (
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await apiClient.retryTask(task.id);
+                    const newTask = response.data.data;
+                    alert(`重试成功，新任务 #${newTask.id} 已创建`);
+                  } catch (error) {
+                    alert(error instanceof Error ? error.message : '重试失败');
+                  }
+                }}
+                className="rounded-full border border-cyan-600 bg-cyan-50 px-4 py-2 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100"
+              >
+                重试
+              </button>
+            )}
+            <Link
+              to="/tasks"
+              className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              任务中心
+            </Link>
             <Link
               to={`/function/${task.function_type}`}
               className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"

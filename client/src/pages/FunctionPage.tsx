@@ -454,6 +454,9 @@ export function FunctionPage() {
             // 本地上传
             const uploadRes = await apiClient.uploadFile(selectedFiles[0], selectedTeamId);
             inputData.referenceImageId = uploadRes.data.data.fileId;
+            if (uploadRes.data.data.tosUrl) {
+              inputData.referenceImageUrl = uploadRes.data.data.tosUrl;
+            }
 
             // 使用上传返回的图片尺寸
             if (!inputData.imageWidth && uploadRes.data.data.imageWidth) {
@@ -512,6 +515,9 @@ export function FunctionPage() {
             } else if (selectedFiles.length > 0) {
               const uploadRes = await apiClient.uploadFile(selectedFiles[0], selectedTeamId);
               inputData.referenceImageId = uploadRes.data.data.fileId;
+              if (uploadRes.data.data.tosUrl) {
+                inputData.referenceImageUrl = uploadRes.data.data.tosUrl;
+              }
             }
           }
         }
@@ -532,6 +538,7 @@ export function FunctionPage() {
             const itemInputData: Record<string, unknown> = {
               ...formData,
               referenceImageId: uploadRes.data.data.fileId,
+              ...(uploadRes.data.data.tosUrl ? { referenceImageUrl: uploadRes.data.data.tosUrl } : {}),
             };
             // 印刷图需要添加图片尺寸
             if (type === 'print-generation') {

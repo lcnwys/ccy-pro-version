@@ -1,5 +1,9 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import dotenv from 'dotenv';
+
+// 确保在读取环境变量之前加载 .env
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.env') });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

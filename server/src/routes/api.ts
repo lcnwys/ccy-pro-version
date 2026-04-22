@@ -24,6 +24,7 @@ apiRouter.post('/tasks/batch', requireAuth, taskController.createBatch);
 apiRouter.get('/tasks', requireAuth, taskController.getList);
 apiRouter.get('/tasks/:id', requireAuth, taskController.getById);
 apiRouter.post('/tasks/:id/refresh-result-url', requireAuth, taskController.refreshResultUrl);
+apiRouter.post('/tasks/:id/retry', requireAuth, taskController.retryTask);
 apiRouter.post('/tasks/batch-refresh-urls', requireAuth, taskController.batchRefreshResultUrls);
 apiRouter.get('/tasks/:batchId/progress', requireAuth, taskController.getBatchProgress);
 
@@ -34,6 +35,7 @@ apiRouter.put('/workflows/:id', requireAuth, workflowController.update);
 apiRouter.get('/workflows/runs', requireAuth, workflowController.listRuns);
 apiRouter.get('/workflows/runs/aggregated', requireAuth, workflowController.listRunsAggregated);
 apiRouter.get('/workflows/runs/:id', requireAuth, workflowController.getRunById);
+apiRouter.post('/workflows/runs/:id/retry-step', requireAuth, workflowController.retryStep);
 apiRouter.get('/workflows/:id', requireAuth, workflowController.getById);
 apiRouter.post('/workflows/:id/run', requireAuth, workflowController.run);
 

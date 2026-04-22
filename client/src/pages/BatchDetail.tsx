@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '@/api';
+import { FUNCTION_FIELDS } from '@/components/StepParamForm';
 import type { TaskRecord } from '@/types';
 
 const FUNCTION_NAMES: Record<string, string> = {
@@ -84,6 +85,10 @@ export function BatchDetail() {
   const [downloading, setDownloading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+  const [retryingTaskId, setRetryingTaskId] = useState<number | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingFunctionType, setEditingFunctionType] = useState<string>('');
+  const [editInputData, setEditInputData] = useState<Record<string, unknown>>({});
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
@@ -229,6 +234,51 @@ export function BatchDetail() {
       alert(error instanceof Error ? error.message : '下载失败');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleRetry = async (taskId: number, customInputData?: Record<string, unknown>) => {
+    setRetryingTaskId(taskId);
+    try {
+      const response = await apiClient.retryTask(taskId, customInputData);
+      const newTask = response.data.data;
+      alert(`重试成功，新任务 #${newTask.id} 已创建`);
+      void fetchTasks(true);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '重试失败');
+    } finally {
+      setRetryingTaskId(null);
+    }
+  };
+
+  const handleOpenEdit = (task: TaskRecord) => {
+    const parsed = parseJson(task.input_data);
+    setEditInputData((parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>);
+    setEditingFunctionType(task.function_type);
+    setEditingTaskId(task.id);
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editingTaskId) return;
+    await handleRetry(editingTaskId, editInputData);
+    setEditingTaskId(null);
+  };
+
+  const handleRetryWorkflowStep = async (task: TaskRecord) => {
+    if (!task.workflow_run_id || task.workflow_item_index == null) return;
+    setRetryingTaskId(task.id);
+    try {
+      const body: { itemIndex: number; stepKey: string; inputData?: Record<string, unknown> } = {
+        itemIndex: task.workflow_item_index as number,
+        stepKey: (task.workflow_step_key as string) || '',
+      };
+      await apiClient.retryWorkflowStep(task.workflow_run_id as number, body);
+      alert('步骤重试已提交');
+      void fetchTasks(true);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '重试失败');
+    } finally {
+      setRetryingTaskId(null);
     }
   };
 
@@ -442,6 +492,29 @@ export function BatchDetail() {
                       刷新
                     </button>
                   )}
+                  {(task.status === 'failed' || task.status === 'success') && (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (task.workflow_run_id) {
+                            void handleRetryWorkflowStep(task);
+                          } else {
+                            void handleRetry(task.id);
+                          }
+                        }}
+                        disabled={retryingTaskId === task.id}
+                        className="rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-[11px] text-cyan-700 transition hover:bg-cyan-100 disabled:opacity-50"
+                      >
+                        {retryingTaskId === task.id ? '重试中...' : '重试'}
+                      </button>
+                      <button
+                        onClick={() => handleOpenEdit(task)}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-50"
+                      >
+                        编辑参数重试
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
                     className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-50"
@@ -617,6 +690,137 @@ export function BatchDetail() {
           </div>
         </div>
       )}
+
+      {/* 编辑参数弹窗 */}
+      {editingTaskId !== null && (() => {
+        const fields = FUNCTION_FIELDS[editingFunctionType] || [];
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+            onClick={() => setEditingTaskId(null)}
+          >
+            <div
+              className="max-h-[85vh] w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                  <div className="text-sm font-medium text-slate-900">编辑参数并重试</div>
+                  <div className="text-xs text-slate-500">{FUNCTION_NAMES[tasks.find(t => t.id === editingTaskId)?.function_type || ''] || ''}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingTaskId(null)}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  取消
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto p-6">
+                {fields.length === 0 ? (
+                  <div className="text-sm text-slate-500">该功能无需配置参数，可直接重试。</div>
+                ) : (
+                  <div className="space-y-4">
+                    {fields.map((field) => {
+                      const fieldValue = editInputData[field.name] ?? field.default ?? '';
+                      const handleFieldChange = (val: unknown) => {
+                        setEditInputData((prev) => ({ ...prev, [field.name]: val }));
+                      };
+
+                      return (
+                        <div key={field.name}>
+                          <label className="mb-1.5 block text-xs font-medium text-slate-700">
+                            {field.label}
+                            {field.required && <span className="ml-1 text-rose-500">*</span>}
+                          </label>
+                          {field.type === 'textarea' && (
+                            <textarea
+                              value={String(fieldValue)}
+                              onChange={(e) => handleFieldChange(e.target.value)}
+                              placeholder={field.placeholder}
+                              rows={3}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none"
+                            />
+                          )}
+                          {field.type === 'text' && (
+                            <input
+                              type="text"
+                              value={String(fieldValue)}
+                              onChange={field.readOnly ? undefined : (e) => handleFieldChange(e.target.value)}
+                              placeholder={field.placeholder}
+                              readOnly={field.readOnly}
+                              className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none ${
+                                field.readOnly ? 'text-slate-400 bg-slate-50 cursor-not-allowed' : 'text-slate-900 placeholder:text-slate-400 focus:border-cyan-500'
+                              }`}
+                            />
+                          )}
+                          {field.type === 'number' && (
+                            <input
+                              type="text"
+                              value={String(fieldValue)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const numVal = Number(val);
+                                handleFieldChange(isNaN(numVal) ? val : numVal);
+                              }}
+                              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none"
+                            />
+                          )}
+                          {field.type === 'select' && (
+                            <select
+                              value={String(fieldValue)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                handleFieldChange(isNaN(Number(val)) ? val : Number(val));
+                              }}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none"
+                            >
+                              {field.options?.map((opt) => (
+                                <option key={String(opt.value)} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          )}
+                          {field.type === 'range' && (
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="range"
+                                min={field.min}
+                                max={field.max}
+                                step={field.step}
+                                value={String(fieldValue)}
+                                onChange={(e) => handleFieldChange(Number(e.target.value))}
+                                className="flex-1"
+                              />
+                              <span className="w-14 text-right text-xs text-cyan-700">
+                                {typeof fieldValue === 'number' ? fieldValue.toFixed(2) : String(fieldValue ?? '')}
+                              </span>
+                            </div>
+                          )}
+                          {field.hint && <div className="mt-1 text-[11px] text-slate-400">{field.hint}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+                <button
+                  onClick={() => setEditingTaskId(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => void handleSubmitEdit()}
+                  className="rounded-xl bg-cyan-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-cyan-500"
+                >
+                  提交重试
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -335,6 +335,74 @@ export const taskController = {
   },
 
   /**
+   * 重试任务（用原参数或新参数重新执行）
+   */
+  retryTask: async (req: AuthRequest, res: Response) => {
+    const timestamp = getBeijingTime();
+    const taskId = parseInt(req.params.id, 10);
+
+    try {
+      console.log(`${LOG_PREFIX} [${timestamp}] 重试任务 taskId=${taskId}`);
+
+      const tasks = query('SELECT * FROM tasks WHERE id = ?', [taskId]) as Array<Record<string, unknown>>;
+      if (tasks.length === 0) {
+        return res.status(404).json({ success: false, error: '任务不存在' });
+      }
+
+      const original = tasks[0];
+
+      if (req.user!.role !== 'super_admin' && original.user_id !== req.user!.id) {
+        if (!isTeamMember(req.user!.id, original.team_id as number)) {
+          return res.status(403).json({ success: false, error: '无权重试该任务' });
+        }
+      }
+
+      const { inputData } = req.body as { inputData?: Record<string, unknown> };
+      const finalInputData = inputData || (original.input_data ? JSON.parse(String(original.input_data)) : {});
+      const functionType = original.function_type as string;
+      const cost = getTaskCost(functionType, finalInputData);
+
+      if (original.team_id && req.user!.role !== 'super_admin') {
+        const budget = getUserBudget(req.user!.id, original.team_id as number);
+        if (!budget || budget.available < cost) {
+          return res.status(400).json({ success: false, error: `额度不足，需要 ${cost} 次元值` });
+        }
+      }
+
+      const batchId = `retry-${uuidv4().slice(0, 8)}`;
+
+      exec(`
+        INSERT INTO tasks (user_id, team_id, batch_id, function_type, status, input_data, cost)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?)
+      `, [
+        original.user_id,
+        original.team_id,
+        batchId,
+        functionType,
+        JSON.stringify(finalInputData),
+        original.team_id ? cost : 0,
+      ]);
+
+      const newTaskId = lastInsertRowid();
+
+      if (original.team_id && req.user!.role !== 'super_admin') {
+        consumeBudget(original.team_id as number, req.user!.id, cost, newTaskId);
+      }
+
+      queue.add({ taskId: newTaskId, functionType: functionType as FunctionType, inputData: finalInputData });
+
+      const newTask = query('SELECT * FROM tasks WHERE id = ?', [newTaskId]) as Array<Record<string, unknown>>;
+
+      console.log(`${LOG_PREFIX} [${timestamp}] 任务重试成功 newTaskId=${newTaskId} from=${taskId}`);
+      res.json({ success: true, data: newTask[0] });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '重试任务失败';
+      console.error(`${LOG_PREFIX} [${timestamp}] 重试任务失败 error=${errorMsg}`);
+      res.status(500).json({ success: false, error: errorMsg });
+    }
+  },
+
+  /**
    * 获取批量任务进度
    */
   getBatchProgress: async (req: AuthRequest, res: Response) => {

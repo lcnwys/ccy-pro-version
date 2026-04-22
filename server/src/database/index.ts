@@ -357,34 +357,46 @@ const createTables = (database: Database, loadedFromFile: boolean = false) => {
     }
     // 迁移旧版 CHECK 约束：source_type IN ('upload', 'library') → ('upload', 'generated')
     if (createSql && createSql.includes("'library'")) {
-      console.log('[Database] migrating materials table CHECK constraint from library to generated...');
-      database.exec(`
-        CREATE TABLE materials_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          team_id INTEGER NOT NULL DEFAULT 0,
-          file_id TEXT UNIQUE NOT NULL,
-          local_file TEXT NOT NULL,
-          original_name TEXT NOT NULL,
-          mime_type TEXT NOT NULL,
-          size_bytes INTEGER NOT NULL DEFAULT 0,
-          source_type TEXT DEFAULT 'upload' CHECK(source_type IN ('upload', 'generated')),
-          task_id INTEGER,
-          workflow_run_id INTEGER,
-          result_url TEXT,
-          image_width INTEGER,
-          image_height INTEGER,
-          tags_json TEXT,
-          usage_count INTEGER NOT NULL DEFAULT 0,
-          last_used_at DATETIME,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      database.exec(`INSERT INTO materials_new SELECT * FROM materials`);
-      database.exec(`DROP TABLE materials`);
-      database.exec(`ALTER TABLE materials_new RENAME TO materials`);
-      console.log('[Database] materials table CHECK constraint migrated successfully');
+      try {
+        console.log('[Database] migrating materials table CHECK constraint from library to generated...');
+        database.exec(`DROP TABLE IF EXISTS materials_new`);
+        database.exec(`
+          CREATE TABLE materials_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL DEFAULT 0,
+            file_id TEXT UNIQUE NOT NULL,
+            local_file TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            source_type TEXT DEFAULT 'upload' CHECK(source_type IN ('upload', 'generated')),
+            task_id INTEGER,
+            workflow_run_id INTEGER,
+            result_url TEXT,
+            image_width INTEGER,
+            image_height INTEGER,
+            tags_json TEXT,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            last_used_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        database.exec(`INSERT INTO materials_new (id, user_id, team_id, file_id, local_file, original_name, mime_type, size_bytes, source_type, task_id, workflow_run_id, result_url, image_width, image_height, tags_json, usage_count, last_used_at, created_at, updated_at)
+          SELECT
+            id, user_id, team_id, file_id, local_file, original_name, mime_type, size_bytes,
+            CASE WHEN source_type IN ('upload', 'library', 'generated') THEN source_type ELSE 'upload' END,
+            task_id, workflow_run_id, result_url, image_width, image_height, tags_json,
+            COALESCE(usage_count, 0), last_used_at, created_at, updated_at
+          FROM materials`);
+        database.exec(`DROP TABLE materials`);
+        database.exec(`ALTER TABLE materials_new RENAME TO materials`);
+        console.log('[Database] materials table CHECK constraint migrated successfully');
+      } catch (migrationErr) {
+        console.warn('[Database] materials migration failed, cleaning up:', migrationErr instanceof Error ? migrationErr.message : migrationErr);
+        database.exec(`DROP TABLE IF EXISTS materials_new`);
+      }
     }
   }
 

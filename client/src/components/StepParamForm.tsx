@@ -15,7 +15,7 @@ interface FormField {
   hint?: string;
 }
 
-const FUNCTION_FIELDS: Record<string, FormField[]> = {
+export const FUNCTION_FIELDS: Record<string, FormField[]> = {
   'image-generation': [
     { name: 'prompt', label: '提示词', type: 'textarea', required: true, placeholder: '描述你想要生成的图片...' },
     { name: 'schema', label: '模式', type: 'select', options: [{ value: 'basic', label: '基础' }, { value: 'advanced', label: '高阶' }], default: 'basic' },
@@ -279,4 +279,4 @@ export function StepParamForm({ step, value, onChange, index }: StepParamFormPro
   );
 }
 
-export { FUNCTION_FIELDS };
+
