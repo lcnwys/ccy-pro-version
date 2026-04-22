@@ -4,12 +4,13 @@ import { config } from '../config/index.js';
 import { getBeijingTime } from '../utils/time.js';
 import type { FunctionType, TaskResult } from './types.js';
 import { tosService } from './tosService.js';
+import { getActivePlatformApiKey } from './platformService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const LOG_PREFIX = '[创次元 API]';
 
-// 动态获取 API Key（每次调用时读取最新值）
-const getApiKey = () => process.env.CHCYAI_API_KEY || config.chcyai.apiKey;
+// 优先从数据库读取平台设置的 API Key，回退到环境变量
+const getApiKey = () => getActivePlatformApiKey() || process.env.CHCYAI_API_KEY || config.chcyai.apiKey;
 
 const apiClient = axios.create({
   baseURL: config.chcyai.baseUrl,
