@@ -359,7 +359,7 @@ export const taskController = {
 
       const { inputData } = req.body as { inputData?: Record<string, unknown> };
       const finalInputData = inputData || (original.input_data ? JSON.parse(String(original.input_data)) : {});
-      const functionType = original.function_type as string;
+      const functionType = original.function_type as FunctionType;
       const cost = getTaskCost(functionType, finalInputData);
 
       if (original.team_id && req.user!.role !== 'super_admin') {
