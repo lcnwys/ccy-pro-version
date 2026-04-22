@@ -46,9 +46,12 @@ const createDefaultInputTemplate = (functionType: string, isFirstChild: boolean)
 
   // 自动设置参考图：第一个步骤引用 item，后续步骤引用上一步结果
   if (NEEDS_REFERENCE_IMAGE.has(functionType)) {
-    baseTemplate.referenceImageId = isFirstChild
-      ? '{{item.referenceImageId}}'
-      : '{{prev.generateImageId}}';
+    if (isFirstChild) {
+      baseTemplate.referenceImageId = '{{item.referenceImageId}}';
+      baseTemplate.referenceImageUrl = '{{item.referenceImageUrl}}';
+    } else {
+      baseTemplate.referenceImageId = '{{prev.generateImageId}}';
+    }
   }
 
   switch (functionType) {
