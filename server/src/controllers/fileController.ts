@@ -56,8 +56,8 @@ export const fileController = {
 
       // 调用创次元 API 上传
       console.log(`${LOG_PREFIX} [${timestamp}] 调用创次元 API 上传文件`);
-      const teamId = req.body.teamId ? parseInt(req.body.teamId, 10) : undefined;
-      const fileId = await chcyaiService.uploadFile(req.file.buffer, req.file.originalname, teamId);
+      const uploadTeamId = req.body.teamId ? parseInt(req.body.teamId, 10) : undefined;
+      const fileId = await chcyaiService.uploadFile(req.file.buffer, req.file.originalname, uploadTeamId);
 
       // 获取图片尺寸（如果是图片）
       let imageWidth: number | null = null;
@@ -75,7 +75,7 @@ export const fileController = {
       }
 
       const requestedTeamId = typeof req.body.teamId === 'string' && req.body.teamId ? Number(req.body.teamId) : undefined;
-      const teamId = requestedTeamId ?? req.user?.teamId ?? 0;
+      const teamId: number = requestedTeamId ?? req.user?.teamId ?? 0;
       const material = req.user
         ? createMaterial({
             userId: req.user.id,
