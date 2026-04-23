@@ -18,6 +18,13 @@ interface TeamSelectorProps {
   onTeamChange: (teamId: number | undefined) => void;
 }
 
+interface Team {
+  id: number;
+  name: string;
+  api_key: string | null;
+  member_role: string;
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps) {
@@ -158,7 +165,11 @@ export function TeamSelector({ selectedTeamId, onTeamChange }: TeamSelectorProps
       {budget && (
         <div className="flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2">
           <span className="text-sm font-medium text-indigo-600">
-            {isSuperAdmin && !selectedTeamId ? '平台模式：无限额度' : `可用额度：${budget.available} 积分`}
+            {isSuperAdmin && !selectedTeamId
+              ? '平台模式：无限额度'
+              : teams.find(t => t.id === selectedTeamId)?.api_key
+                ? `自有 Key 模式 · 可用 ${budget.available}`
+                : `可用额度：${budget.available} 积分`}
           </span>
         </div>
       )}

@@ -29,6 +29,12 @@ interface UserBudget {
   available: number;
 }
 
+interface TeamBudget {
+  amount: number;
+  used_amount: number;
+  available: number;
+}
+
 const EMPTY_SUMMARY: TaskListSummary = {
   total: 0,
   pending: 0,
@@ -46,11 +52,14 @@ export function TeamManagement() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [budgets, setBudgets] = useState<Record<number, UserBudget>>({});
+  const [teamBudgets, setTeamBudgets] = useState<Record<number, TeamBudget>>({});
   const [taskSummary, setTaskSummary] = useState<TaskListSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [allocateUserId, setAllocateUserId] = useState<number>(0);
   const [allocateAmount, setAllocateAmount] = useState<number>(0);
+  const [showSetBudgetModal, setShowSetBudgetModal] = useState(false);
+  const [newTotalBudget, setNewTotalBudget] = useState<number>(0);
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberPassword, setNewMemberPassword] = useState('');
@@ -98,18 +107,21 @@ export function TeamManagement() {
     try {
       const token = localStorage.getItem('token');
       const nextBudgets: Record<number, UserBudget> = {};
+      const nextTeamBudgets: Record<number, TeamBudget> = {};
 
       for (const team of teams) {
-        const res = await fetch(`${API_BASE}/budget/user/${team.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (data.success) {
-          nextBudgets[team.id] = data.data;
-        }
+        const [userRes, teamRes] = await Promise.all([
+          fetch(`${API_BASE}/budget/user/${team.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE}/budget/team/${team.id}`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        const userData = await userRes.json();
+        const teamData = await teamRes.json();
+        if (userData.success) nextBudgets[team.id] = userData.data;
+        if (teamData.success) nextTeamBudgets[team.id] = teamData.data;
       }
 
       setBudgets(nextBudgets);
+      setTeamBudgets(nextTeamBudgets);
     } catch (error) {
       console.error('Failed to fetch budgets:', error);
     }
@@ -361,20 +373,51 @@ export function TeamManagement() {
                     {selectedTeam.description && (
                       <p className="mt-2 text-sm text-slate-500">{selectedTeam.description}</p>
                     )}
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-500">
-                      <span>可用额度：{budgets[selectedTeam.id]?.available || 0}</span>
-                      <span>总额度：{budgets[selectedTeam.id]?.amount || 0}</span>
-                      <span>已用额度：{budgets[selectedTeam.id]?.used_amount || 0}</span>
+                    <div className="mt-3 flex items-center gap-2">
+                      {selectedTeam.api_key ? (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                          自有 Key 模式（不扣平台积分）
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                          平台计费模式
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-4">
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <div className="text-2xl font-bold text-slate-900">{teamBudgets[selectedTeam.id]?.amount || 0}</div>
+                        <div className="text-xs text-slate-500">总额度</div>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <div className="text-2xl font-bold text-slate-900">{teamBudgets[selectedTeam.id]?.used_amount || 0}</div>
+                        <div className="text-xs text-slate-500">已分配</div>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <div className="text-2xl font-bold text-cyan-700">{budgets[selectedTeam.id]?.available || 0}</div>
+                        <div className="text-xs text-slate-500">我的可用</div>
+                      </div>
                     </div>
                   </div>
 
                   {isTeamAdmin && (
-                    <button
-                      onClick={() => setShowAllocateModal(true)}
-                      className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      分配额度
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setNewTotalBudget(teamBudgets[selectedTeam.id]?.amount || 0);
+                          setShowSetBudgetModal(true);
+                        }}
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        设定总额度
+                      </button>
+                      <button
+                        onClick={() => setShowAllocateModal(true)}
+                        className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        分配额度
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -506,6 +549,63 @@ export function TeamManagement() {
                   创建
                 </button>
                 <button type="button" onClick={() => setShowCreateMember(false)} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">
+                  取消
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSetBudgetModal && isTeamAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-900">设定团队总额度</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              设定总额度（对标你在创次元平台的充值量），用于内部分配和消耗追踪。
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!selectedTeam) return;
+                try {
+                  const token = localStorage.getItem('token');
+                  const res = await fetch(`${API_BASE}/budget/team/${selectedTeam.id}/total`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ amount: newTotalBudget }),
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    setShowSetBudgetModal(false);
+                    await fetchBudgets();
+                    alert('总额度设置成功');
+                  } else {
+                    alert(data.error || '设置失败');
+                  }
+                } catch (error) {
+                  alert('设置失败');
+                }
+              }}
+              className="mt-4 space-y-4"
+            >
+              <input
+                type="number"
+                value={newTotalBudget}
+                onChange={(e) => setNewTotalBudget(parseFloat(e.target.value))}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                min="1"
+                required
+                placeholder="输入总额度"
+              />
+              <div className="flex gap-3">
+                <button type="submit" className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white">
+                  确认
+                </button>
+                <button type="button" onClick={() => setShowSetBudgetModal(false)} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">
                   取消
                 </button>
               </div>

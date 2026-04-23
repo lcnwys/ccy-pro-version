@@ -26,11 +26,11 @@ const extractSubmittedTaskId = (value: unknown): string | null => {
   return null;
 };
 
-const waitForTaskResult = async (functionType: FunctionType, taskOriginId: string) => {
+const waitForTaskResult = async (functionType: FunctionType, taskOriginId: string, teamId?: number) => {
   let lastResult: Record<string, unknown> | null = null;
 
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
-    const result = await chcyaiService.queryResult(functionType, taskOriginId) as Record<string, unknown>;
+    const result = await chcyaiService.queryResult(functionType, taskOriginId, teamId) as Record<string, unknown>;
     lastResult = result;
     const orderStatus = result.orderStatus;
 
@@ -39,7 +39,7 @@ const waitForTaskResult = async (functionType: FunctionType, taskOriginId: strin
 
       if (!tempUrl) {
         try {
-          tempUrl = await chcyaiService.getTempUrl(functionType, taskOriginId);
+          tempUrl = await chcyaiService.getTempUrl(functionType, taskOriginId, teamId);
         } catch (error) {
           console.warn(`${LOG_PREFIX} 获取临时 URL 失败 taskOriginId=${taskOriginId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -72,9 +72,13 @@ export const createProcessor = () => {
       await taskRepository.updateStatus(job.taskId, 'processing');
       console.log(`${LOG_PREFIX} [${timestamp}] 任务状态更新为 processing taskId=${job.taskId}`);
 
+      // 获取任务的 teamId，用于选择对应的 API Key
+      const taskInfo = query('SELECT team_id FROM tasks WHERE id = ?', [job.taskId]) as Array<{ team_id: number | null }>;
+      const teamId = taskInfo.length > 0 ? (taskInfo[0].team_id as number | undefined) : undefined;
+
       // 调用创次元 API
       console.log(`${LOG_PREFIX} [${timestamp}] 调用创次元 API taskId=${job.taskId}`);
-      const submitResult = await chcyaiService.execute(job.functionType, job.inputData) as unknown;
+      const submitResult = await chcyaiService.execute(job.functionType, job.inputData, teamId) as unknown;
       const taskOriginId = extractSubmittedTaskId(submitResult);
 
       if (!taskOriginId) {
@@ -84,7 +88,7 @@ export const createProcessor = () => {
       await taskRepository.setOriginTaskId(job.taskId, taskOriginId);
       console.log(`${LOG_PREFIX} [${timestamp}] 已记录上游任务号 taskId=${job.taskId} originTaskId=${taskOriginId}`);
 
-      const result = await waitForTaskResult(job.functionType, taskOriginId);
+      const result = await waitForTaskResult(job.functionType, taskOriginId, teamId);
 
       // 将临时 URL 持久化到 TOS
       let persistentUrl: string | null = null;

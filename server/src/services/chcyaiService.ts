@@ -5,12 +5,19 @@ import { getBeijingTime } from '../utils/time.js';
 import type { FunctionType, TaskResult } from './types.js';
 import { tosService } from './tosService.js';
 import { getActivePlatformApiKey } from './platformService.js';
+import { getTeamApiKeyValue } from './teamService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const LOG_PREFIX = '[创次元 API]';
 
-// 优先从数据库读取平台设置的 API Key，回退到环境变量
-const getApiKey = () => getActivePlatformApiKey() || process.env.CHCYAI_API_KEY || config.chcyai.apiKey;
+// API Key 优先级：团队 Key > 平台 Key > 环境变量
+const getApiKey = (teamId?: number) => {
+  if (teamId) {
+    const teamKey = getTeamApiKeyValue(teamId);
+    if (teamKey) return teamKey;
+  }
+  return getActivePlatformApiKey() || process.env.CHCYAI_API_KEY || config.chcyai.apiKey;
+};
 
 const apiClient = axios.create({
   baseURL: config.chcyai.baseUrl,
@@ -98,11 +105,11 @@ export const chcyaiService = {
   /**
    * 上传文件
    */
-  uploadFile: async (file: Buffer, filename: string): Promise<string> => {
+  uploadFile: async (file: Buffer, filename: string, teamId?: number): Promise<string> => {
     const timestamp = getBeijingTime();
     console.log(`${LOG_PREFIX} [${timestamp}] UPLOAD FILE → ${filename} (${file.length} bytes)`);
 
-    const apiKey = getApiKey();
+    const apiKey = getApiKey(teamId);
     const baseUrl = config.chcyai.baseUrl;
 
     console.log(`${LOG_PREFIX}           Base URL: ${baseUrl}`);
@@ -147,7 +154,7 @@ export const chcyaiService = {
   /**
    * 执行 AI 功能
    */
-  execute: async (functionType: FunctionType, inputData: Record<string, unknown>): Promise<TaskResult> => {
+  execute: async (functionType: FunctionType, inputData: Record<string, unknown>, teamId?: number): Promise<TaskResult> => {
     const endpointMap: Record<FunctionType, string> = {
       'image-generation': '/v1/images/generations',
       'print-generation': '/v1/prints/generations',
@@ -338,7 +345,10 @@ export const chcyaiService = {
     });
 
     try {
-      const response = await apiClient.post(endpoint, requestBody);
+      const resolvedApiKey = getApiKey(teamId);
+      const response = await apiClient.post(endpoint, requestBody, {
+        headers: { Authorization: `Bearer ${resolvedApiKey}` },
+      });
       console.log(`${LOG_PREFIX} [${getBeijingTime()}] EXECUTE SUCCESS → ${functionType}`);
       return response.data.data;
     } catch (error) {
@@ -361,7 +371,7 @@ export const chcyaiService = {
   /**
    * 查询任务结果
    */
-  queryResult: async (functionType: FunctionType, taskId: string): Promise<TaskResult> => {
+  queryResult: async (functionType: FunctionType, taskId: string, teamId?: number): Promise<TaskResult> => {
     const endpointMap: Record<FunctionType, string> = {
       'image-generation': `/v1/query/images/info/${taskId}`,
       'print-generation': `/v1/query/prints/info/${taskId}`,
@@ -384,8 +394,10 @@ export const chcyaiService = {
     console.log(`${LOG_PREFIX} [${timestamp}] QUERY → ${functionType} taskId: ${taskId}`);
 
     try {
-      const response = await apiClient.get(endpoint);
-      console.log(`${LOG_PREFIX} [${timestamp}] QUERY SUCCESS → ${functionType}`);
+      const resolvedApiKey = getApiKey(teamId);
+      const response = await apiClient.get(endpoint, {
+        headers: { Authorization: `Bearer ${resolvedApiKey}` },
+      });
       return response.data.data;
     } catch (error) {
       console.error(`${LOG_PREFIX} [${timestamp}] QUERY FAILED → ${functionType}`);
@@ -406,7 +418,7 @@ export const chcyaiService = {
   /**
    * 获取临时下载 URL
    */
-  getTempUrl: async (functionType: FunctionType, taskId: string): Promise<string> => {
+  getTempUrl: async (functionType: FunctionType, taskId: string, teamId?: number): Promise<string> => {
     const endpointMap: Record<FunctionType, string> = {
       'image-generation': `/v1/query/images/getTempUrlInfo/${taskId}`,
       'print-generation': `/v1/query/prints/getTempUrlInfo/${taskId}`,
@@ -429,7 +441,10 @@ export const chcyaiService = {
     console.log(`${LOG_PREFIX} [${timestamp}] GET TEMP URL → ${functionType} taskId: ${taskId}`);
 
     try {
-      const response = await apiClient.get(endpoint);
+      const resolvedApiKey = getApiKey(teamId);
+      const response = await apiClient.get(endpoint, {
+        headers: { Authorization: `Bearer ${resolvedApiKey}` },
+      });
       console.log(`${LOG_PREFIX} [${timestamp}] GET TEMP URL SUCCESS → ${response.data.data.tempUrl}`);
       return response.data.data.tempUrl;
     } catch (error) {

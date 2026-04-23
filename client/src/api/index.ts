@@ -112,6 +112,9 @@ export const apiClient = {
   rechargeBudget: (teamId: number, amount: number) =>
     api.post('/budget/recharge', { teamId, amount }),
 
+  setTeamTotalBudget: (teamId: number, amount: number) =>
+    api.put(`/budget/team/${teamId}/total`, { amount }),
+
   allocateBudget: (teamId: number, userId: number, amount: number) =>
     api.post('/budget/allocate', { userId, amount, teamId }),
 

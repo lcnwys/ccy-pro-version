@@ -4,7 +4,7 @@ import { query, exec, lastInsertRowid } from '../database/index.js';
 import { queue } from '../queue/index.js';
 import { getUserBudget, consumeBudget } from '../services/budgetService.js';
 import { getTaskCost } from '../services/pricing.js';
-import { isTeamAdmin, isTeamMember } from '../services/teamService.js';
+import { isTeamAdmin, isTeamMember, getTeamApiKeyValue } from '../services/teamService.js';
 import { chcyaiService } from '../services/chcyaiService.js';
 import { getBeijingTime } from '../utils/time.js';
 import type { AuthRequest } from '../middlewares/auth.js';
@@ -45,10 +45,13 @@ export const taskController = {
         });
       }
 
-      // 检查用户额度（超级管理员跳过检查）
+      // 检查用户额度（超级管理员跳过，团队有自己 Key 也跳过）
       let userBudget = null;
       const taskCost = getTaskCost(functionType, inputData);
-      if (!isSuperAdmin && teamId) {
+      const teamHasOwnKey = teamId ? !!getTeamApiKeyValue(teamId) : false;
+      const skipBilling = isSuperAdmin || teamHasOwnKey;
+
+      if (!skipBilling && teamId) {
         userBudget = getUserBudget(req.user!.id, teamId);
 
         if (!userBudget || userBudget.available < taskCost) {
@@ -63,21 +66,21 @@ export const taskController = {
 
       const batchId = uuidv4();
 
-      console.log(`${LOG_PREFIX} [${timestamp}] 创建单图任务 type=${functionType} batchId=${batchId}`);
+      console.log(`${LOG_PREFIX} [${timestamp}] 创建单图任务 type=${functionType} batchId=${batchId}${teamHasOwnKey ? ' (团队Key模式)' : ''}`);
       console.log(`${LOG_PREFIX}           inputData=${JSON.stringify(inputData).substring(0, 200)}`);
 
       // 任务表的 team_id 当前仍是非空字段，平台模式使用 0 作为系统占位值。
       exec(`
         INSERT INTO tasks (user_id, team_id, batch_id, function_type, status, input_data, cost)
         VALUES (?, ?, ?, ?, 'pending', ?, ?)
-      `, [req.user!.id, useTeamId, batchId, functionType, JSON.stringify(inputData), isSuperAdmin ? 0 : taskCost]);
+      `, [req.user!.id, useTeamId, batchId, functionType, JSON.stringify(inputData), skipBilling ? 0 : taskCost]);
 
       const taskId = { id: lastInsertRowid() };
 
       console.log(`${LOG_PREFIX} [${timestamp}] 任务已创建 taskId=${taskId.id}`);
 
-      // 预扣额度（超级管理员跳过）
-      if (!isSuperAdmin && teamId) {
+      // 预扣额度（跳过计费模式不扣）
+      if (!skipBilling && teamId) {
         consumeBudget(teamId, req.user!.id, taskCost, taskId.id);
       }
 
@@ -134,9 +137,11 @@ export const taskController = {
       const taskIds: number[] = [];
       const perTaskCosts = items.map((item) => getTaskCost(functionType, item.inputData));
       const totalCost = perTaskCosts.reduce((sum, cost) => sum + cost, 0);
+      const teamHasOwnKey = teamId ? !!getTeamApiKeyValue(teamId) : false;
+      const skipBilling = isSuperAdmin || teamHasOwnKey;
 
-      // 检查用户额度是否充足（超级管理员跳过）
-      if (!isSuperAdmin && teamId) {
+      // 检查用户额度是否充足（跳过计费模式不检查）
+      if (!skipBilling && teamId) {
         const userBudget = getUserBudget(req.user!.id, teamId);
         if (!userBudget || userBudget.available < totalCost) {
           return res.status(402).json({
@@ -148,7 +153,7 @@ export const taskController = {
         }
       }
 
-      console.log(`${LOG_PREFIX} [${timestamp}] 创建批量任务 type=${functionType} count=${items.length} batchId=${batchId}`);
+      console.log(`${LOG_PREFIX} [${timestamp}] 创建批量任务 type=${functionType} count=${items.length} batchId=${batchId}${teamHasOwnKey ? ' (团队Key模式)' : ''}`);
 
       // 创建所有子任务
       for (const [index, item] of items.entries()) {
@@ -156,13 +161,13 @@ export const taskController = {
         exec(`
           INSERT INTO tasks (user_id, team_id, batch_id, function_type, status, input_data, cost)
           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-        `, [req.user!.id, useTeamId, batchId, functionType, JSON.stringify(item.inputData), isSuperAdmin ? 0 : taskCost]);
+        `, [req.user!.id, useTeamId, batchId, functionType, JSON.stringify(item.inputData), skipBilling ? 0 : taskCost]);
 
         const taskId = { id: lastInsertRowid() };
         taskIds.push(taskId.id);
 
-        // 预扣额度（超级管理员跳过）
-        if (!isSuperAdmin && teamId) {
+        // 预扣额度（跳过计费模式不扣）
+        if (!skipBilling && teamId) {
           consumeBudget(teamId, req.user!.id, taskCost, taskId.id);
         }
 
@@ -361,8 +366,10 @@ export const taskController = {
       const finalInputData = inputData || (original.input_data ? JSON.parse(String(original.input_data)) : {});
       const functionType = original.function_type as FunctionType;
       const cost = getTaskCost(functionType, finalInputData);
+      const teamHasOwnKey = original.team_id ? !!getTeamApiKeyValue(original.team_id as number) : false;
+      const skipBilling = req.user!.role === 'super_admin' || teamHasOwnKey;
 
-      if (original.team_id && req.user!.role !== 'super_admin') {
+      if (!skipBilling && original.team_id) {
         const budget = getUserBudget(req.user!.id, original.team_id as number);
         if (!budget || budget.available < cost) {
           return res.status(400).json({ success: false, error: `额度不足，需要 ${cost} 次元值` });
@@ -380,12 +387,12 @@ export const taskController = {
         batchId,
         functionType,
         JSON.stringify(finalInputData),
-        original.team_id ? cost : 0,
+        skipBilling ? 0 : cost,
       ]);
 
       const newTaskId = lastInsertRowid();
 
-      if (original.team_id && req.user!.role !== 'super_admin') {
+      if (!skipBilling && original.team_id) {
         consumeBudget(original.team_id as number, req.user!.id, cost, newTaskId);
       }
 

@@ -5,6 +5,7 @@ import {
   getTeamBudget,
   getUserBudget,
   getTransactions,
+  setTeamTotalBudget,
 } from '../services/budgetService.js';
 import { isTeamAdmin } from '../services/teamService.js';
 import type { AuthRequest } from '../middlewares/auth.js';
@@ -128,6 +129,31 @@ export const budgetController = {
         success: false,
         error: errorMsg,
       });
+    }
+  },
+
+  /**
+   * 团队管理员自行设定总额度
+   */
+  setTotalBudget: async (req: AuthRequest, res: Response) => {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const { amount } = req.body as { amount: number };
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ success: false, error: '额度必须大于 0' });
+      }
+
+      if (req.user!.role !== 'super_admin' && !isTeamAdmin(req.user!.id, teamId)) {
+        return res.status(403).json({ success: false, error: '需要团队管理员权限' });
+      }
+
+      setTeamTotalBudget(teamId, amount, req.user!.id);
+
+      res.json({ success: true, message: '总额度设置成功' });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '设置额度失败';
+      res.status(500).json({ success: false, error: errorMsg });
     }
   },
 

@@ -64,6 +64,95 @@ export const rechargeBudget = (teamId: number, amount: number, createdBy: number
     VALUES ('recharge', ?, ?, '平台充值', ?)
   `, [amount, teamId, createdBy]);
 
+  // 自动将充值额度分配给团队管理员
+  const team = query('SELECT owner_id FROM teams WHERE id = ?', [teamId]) as Array<{ owner_id: number }>;
+  if (team.length > 0) {
+    const ownerId = team[0].owner_id;
+    const existingAlloc = query('SELECT id FROM budget_allocations WHERE team_id = ? AND user_id = ?', [teamId, ownerId]);
+    if (existingAlloc.length > 0) {
+      exec(`
+        UPDATE budget_allocations SET amount = amount + ?, updated_at = CURRENT_TIMESTAMP
+        WHERE team_id = ? AND user_id = ?
+      `, [amount, teamId, ownerId]);
+    } else {
+      exec(`
+        INSERT INTO budget_allocations (team_id, user_id, amount, used_amount, created_by)
+        VALUES (?, ?, ?, 0, ?)
+      `, [teamId, ownerId, amount, createdBy]);
+    }
+
+    // 更新团队已用额度（分配出去的部分）
+    exec(`
+      UPDATE budgets SET used_amount = used_amount + ?, updated_at = CURRENT_TIMESTAMP
+      WHERE team_id = ?
+    `, [amount, teamId]);
+
+    // 记录分配流水
+    exec(`
+      INSERT INTO transactions (type, amount, team_id, user_id, description, created_by)
+      VALUES ('allocate', ?, ?, ?, '充值自动分配给管理员', ?)
+    `, [amount, teamId, ownerId, createdBy]);
+  }
+
+  return budgetId;
+};
+
+/**
+ * 团队管理员自行设定总额度（用于绑了自己 Key 的团队，对标创次元充值量）
+ * 设定后自动全部分配给管理员
+ */
+export const setTeamTotalBudget = (teamId: number, totalAmount: number, createdBy: number): number => {
+  const existing = query('SELECT id, used_amount FROM budgets WHERE team_id = ?', [teamId]) as Array<{ id: number; used_amount: number }>;
+
+  let budgetId: number;
+  if (existing.length > 0) {
+    exec(`
+      UPDATE budgets SET amount = ?, used_amount = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE team_id = ?
+    `, [totalAmount, teamId]);
+    budgetId = existing[0].id;
+  } else {
+    exec(`
+      INSERT INTO budgets (team_id, amount, used_amount, created_by)
+      VALUES (?, ?, 0, ?)
+    `, [teamId, totalAmount, createdBy]);
+    budgetId = lastInsertRowid();
+  }
+
+  // 清除旧的分配记录，重新分配给管理员
+  const usedByOthers = query(`
+    SELECT COALESCE(SUM(amount - used_amount), 0) as locked
+    FROM budget_allocations
+    WHERE team_id = ? AND user_id != ?
+  `, [teamId, createdBy])[0] as { locked: number };
+
+  const adminAmount = totalAmount - (usedByOthers?.locked || 0);
+
+  const existingAlloc = query('SELECT id FROM budget_allocations WHERE team_id = ? AND user_id = ?', [teamId, createdBy]);
+  if (existingAlloc.length > 0) {
+    exec(`
+      UPDATE budget_allocations SET amount = ?, used_amount = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE team_id = ? AND user_id = ?
+    `, [adminAmount, teamId, createdBy]);
+  } else {
+    exec(`
+      INSERT INTO budget_allocations (team_id, user_id, amount, used_amount, created_by)
+      VALUES (?, ?, ?, 0, ?)
+    `, [teamId, createdBy, adminAmount, createdBy]);
+  }
+
+  // 更新团队已用额度 = 其他成员已分配的额度
+  exec(`
+    UPDATE budgets SET used_amount = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE team_id = ?
+  `, [usedByOthers?.locked || 0, teamId]);
+
+  // 记录流水
+  exec(`
+    INSERT INTO transactions (type, amount, team_id, description, created_by)
+    VALUES ('recharge', ?, ?, '管理员设定总额度', ?)
+  `, [totalAmount, teamId, createdBy]);
+
   return budgetId;
 };
 

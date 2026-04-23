@@ -143,6 +143,14 @@ export const getTeamApiKeyFull = (teamId: number, userId: number): string | null
 };
 
 /**
+ * 获取团队 API Key 原始值（内部使用，无权限校验）
+ */
+export const getTeamApiKeyValue = (teamId: number): string | null => {
+  const teams = query('SELECT api_key FROM teams WHERE id = ?', [teamId]) as Array<{ api_key: string | null }>;
+  return teams.length > 0 ? teams[0].api_key : null;
+};
+
+/**
  * 检查用户是否是团队成员
  */
 export const isTeamMember = (userId: number, teamId: number): boolean => {

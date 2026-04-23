@@ -3,7 +3,7 @@ import { config } from '../config/index.js';
 import { exec, lastInsertRowid, query } from '../database/index.js';
 import { getUserBudget, consumeBudget } from './budgetService.js';
 import { getTaskCost } from './pricing.js';
-import { isTeamAdmin, isTeamMember } from './teamService.js';
+import { isTeamAdmin, isTeamMember, getTeamApiKeyValue } from './teamService.js';
 import { chcyaiService } from './chcyaiService.js';
 import { createMaterial } from './materialService.js';
 import { getBeijingTime } from '../utils/time.js';
@@ -91,11 +91,11 @@ const extractSubmittedTaskId = (value: unknown): string | null => {
   return null;
 };
 
-const waitForTaskResult = async (functionType: FunctionType, taskOriginId: string) => {
+const waitForTaskResult = async (functionType: FunctionType, taskOriginId: string, teamId?: number) => {
   let lastResult: Record<string, unknown> | null = null;
 
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt += 1) {
-    const result = await chcyaiService.queryResult(functionType, taskOriginId) as Record<string, unknown>;
+    const result = await chcyaiService.queryResult(functionType, taskOriginId, teamId) as Record<string, unknown>;
     lastResult = result;
     const orderStatus = result.orderStatus;
 
@@ -104,7 +104,7 @@ const waitForTaskResult = async (functionType: FunctionType, taskOriginId: strin
 
       if (!tempUrl) {
         try {
-          tempUrl = await chcyaiService.getTempUrl(functionType, taskOriginId);
+          tempUrl = await chcyaiService.getTempUrl(functionType, taskOriginId, teamId);
         } catch (error) {
           console.warn(`${LOG_PREFIX} 获取临时 URL 失败 taskOriginId=${taskOriginId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -574,9 +574,11 @@ export const workflowService = {
               resolveTemplateValue(step.inputTemplate, context) as Record<string, unknown>
             );
             const taskCost = getTaskCost(step.functionType, resolvedInput);
+            const teamHasOwnKey = !!getTeamApiKeyValue(input.teamId);
+            const skipBilling = input.dryRun || input.isSuperAdmin || teamHasOwnKey;
 
-            // 调试模式或超级管理员：跳过额度检查
-            if (!input.dryRun && input.teamId > 0 && !input.isSuperAdmin) {
+            // 跳过计费模式不检查额度
+            if (!skipBilling && input.teamId > 0) {
               const budget = getUserBudget(input.createdBy, input.teamId);
               if (!budget || budget.available < taskCost) {
                 throw new Error(`额度不足，无法执行步骤 ${step.name}`);
@@ -589,7 +591,7 @@ export const workflowService = {
               batchId: itemBatchId,
               functionType: step.functionType,
               inputData: resolvedInput,
-              cost: (input.teamId > 0 && !input.dryRun && !input.isSuperAdmin) ? taskCost : 0,
+              cost: skipBilling ? 0 : taskCost,
               workflowId: input.workflowId,
               workflowRunId: input.runId,
               workflowStepKey: step.key,
@@ -599,8 +601,8 @@ export const workflowService = {
 
             console.log(`${LOG_PREFIX} [${timestamp}] 任务已创建并加入队列 taskId=${taskId} step=${step.name} itemIndex=${itemIndex}`);
 
-            // 调试模式或超级管理员：跳过额度扣除
-            if (!input.dryRun && input.teamId > 0 && !input.isSuperAdmin) {
+            // 跳过计费模式不扣额度
+            if (!skipBilling && input.teamId > 0) {
               consumeBudget(input.teamId, input.createdBy, taskCost, taskId);
             }
 

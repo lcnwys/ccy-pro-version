@@ -80,6 +80,7 @@ apiRouter.get('/teams/:id/api-key/full', requireAuth, teamController.getApiKeyFu
 // 预算和额度管理
 apiRouter.post('/budget/recharge', requireAuth, requireSuperAdmin, budgetController.recharge);
 apiRouter.post('/budget/allocate', requireAuth, budgetController.allocate);
+apiRouter.put('/budget/team/:teamId/total', requireAuth, budgetController.setTotalBudget);
 apiRouter.get('/budget/team/:teamId', requireAuth, budgetController.getTeamBudget);
 apiRouter.get('/budget/user/:teamId', requireAuth, budgetController.getUserBudget);
 apiRouter.get('/transactions', requireAuth, budgetController.getTransactions);
