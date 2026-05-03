@@ -120,20 +120,39 @@ export const fileController = {
 
     console.log(`${LOG_PREFIX} [${timestamp}] 下载文件 filename=${filename}`);
 
-    try {
-      const buffer = await fileService.readFile(filename);
+    // 创次元 fileId 是纯数字（如 2047691156073824258）
+    const isFileId = /^[0-9]{15,}$/.test(filename);
 
-      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-      res.setHeader('Content-Type', fileService.getMimeType(filename));
-      res.send(buffer);
+    if (isFileId) {
+      try {
+        console.log(`${LOG_PREFIX} [${timestamp}] 检测到 fileId，获取远程下载链接`);
+        const url = await chcyaiService.getFileDownloadUrl(filename);
+        res.redirect(url);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to get remote file url';
+        console.error(`${LOG_PREFIX} [${timestamp}] 获取远程文件链接失败 error=${errorMsg}`);
+        res.status(500).json({
+          success: false,
+          error: errorMsg,
+        });
+      }
+    } else {
+      // 本地文件下载
+      try {
+        const buffer = await fileService.readFile(filename);
 
-      console.log(`${LOG_PREFIX} [${timestamp}] 下载成功 filename=${filename}`);
-    } catch (error) {
-      console.error(`${LOG_PREFIX} [${timestamp}] 下载失败 filename=${filename}`);
-      res.status(404).json({
-        success: false,
-        error: 'File not found',
-      });
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+        res.setHeader('Content-Type', fileService.getMimeType(filename));
+        res.send(buffer);
+
+        console.log(`${LOG_PREFIX} [${timestamp}] 下载成功 filename=${filename}`);
+      } catch (error) {
+        console.error(`${LOG_PREFIX} [${timestamp}] 下载失败 filename=${filename}`);
+        res.status(404).json({
+          success: false,
+          error: 'File not found',
+        });
+      }
     }
   },
 
